@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>異種伝言ゲーム | あそびばこ</title>
+  <link rel="stylesheet" href="../../kit/kit.css">
+  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="theme.css">
+</head>
+<body class="kit">
+<div id="app">
+
+  <!-- ==================== タイトル画面 ==================== -->
+  <div id="titleScreen" class="screen active">
+
+    <div class="k-panel k-panel--tape ishu-title">
+      <h1 class="k-h1">異種伝言ゲーム</h1>
+      <p>お題は伝わるたびに、修飾語が増えていく。</p>
+    </div>
+
+    <div class="settings-panel">
+      <div class="setting-row">
+        <p class="setting-label">プレイ人数</p>
+        <div class="toggle-group" id="playerCount">
+          <button class="toggle-btn" data-value="2">2人</button>
+          <button class="toggle-btn active" data-value="3">3人</button>
+          <button class="toggle-btn" data-value="4">4人</button>
+          <button class="toggle-btn" data-value="5">5人</button>
+          <button class="toggle-btn" data-value="6">6人</button>
+          <button class="toggle-btn" data-value="7">7人</button>
+        </div>
+      </div>
+
+      <div class="setting-row">
+        <p class="setting-label">難易度（修飾語の難しさ）</p>
+        <div class="toggle-group" id="difficulty">
+          <button class="toggle-btn" data-value="easy">やさしい</button>
+          <button class="toggle-btn active" data-value="normal">ふつう</button>
+          <button class="toggle-btn" data-value="hard">むずかしい</button>
+        </div>
+        <p class="setting-hint">
+          やさしい：赤い・大きな など<br>
+          ふつう：翼が生えた・浮いている など<br>
+          むずかしい：宇宙から来た・量子的に重ね合わさった など
+        </p>
+      </div>
+
+      <div class="setting-row">
+        <p class="setting-label">ゲームモード</p>
+        <div class="toggle-group" id="gameModeToggle">
+          <button class="toggle-btn" data-value="normal">ノーマル</button>
+          <button class="toggle-btn active" data-value="hard">ハード</button>
+        </div>
+        <p class="setting-hint">
+          ノーマル：最初は修飾語なし<br>
+          ハード：スタート時から修飾語1つ付き
+        </p>
+      </div>
+
+      <div class="setting-row">
+        <p class="setting-label">Claude APIキー
+          <span class="setting-badge">AI変換・答え判定に使用</span>
+        </p>
+        <input type="password" id="claudeKeyInput" class="api-key-input"
+          placeholder="sk-ant-..." autocomplete="off">
+        <p class="api-key-hint">
+          キーはこの端末にだけ保存されます。未入力でもAI以外のアクションで遊べます。
+        </p>
+      </div>
+    </div>
+
+    <button class="btn btn-start" id="startBtn" data-se="start">ゲームスタート</button>
+  </div>
+
+
+  <!-- ==================== ゲームプレイ画面 ==================== -->
+  <div id="gameScreen" class="screen">
+    <div class="player-header">
+      <div class="player-badge" id="playerBadge">1人目</div>
+      <div class="player-progress" id="progressDots"></div>
+    </div>
+    <div class="game-content" id="gameContent"></div>
+  </div>
+
+
+  <!-- ==================== リザルト画面 ==================== -->
+  <div id="resultScreen" class="screen">
+    <div class="result-header">
+      <div class="result-emoji" id="resultEmoji">★</div>
+      <h2 class="result-title correct" id="resultTitle">正解！</h2>
+      <p class="result-topic">最終お題：<span id="resultTopicText"></span></p>
+    </div>
+    <div class="action-history">
+      <p class="history-title">各プレイヤーのアクション</p>
+      <div id="actionHistory"></div>
+    </div>
+    <div class="result-buttons">
+      <button class="btn btn-primary" id="replayBtn">設定にもどる</button>
+      <button class="btn btn-secondary" id="continueBtn" data-se="start">同じ設定で続ける</button>
+    </div>
+  </div>
+
+</div>
+
+<script src="../../kit/kit.js"></script>
+<script src="config.js"></script>
+<script src="topics.js"></script>
+<script src="game.js"></script>
+<script src="actions/ai-transform.js"></script>
+<script src="actions/drawing.js"></script>
+<script src="actions/flash-draw.js"></script>
+<script src="actions/half-second-talk.js"></script>
+<script src="actions/gesture-hint.js"></script>
+<script src="actions/shapes.js"></script>
+<script src="actions/verbal.js"></script>
+<script src="ui.js"></script>
+
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+  const ID = 'ishu-dengon';
+  const KEY_STORE = 'ishu.claudeKey';
+  const STATE_KEYS = ['playerCount','difficulty','gameMode','baseTopic','category','currentModifiers','modifierCategories',
+    'modifierOrder','currentPlayerIndex','roundData','isCorrect','usedModifiers','judged'];
+
+  initTitleScreen();
+
+  // APIキーは端末に保存して次回も使う
+  const keyIn = document.getElementById('claudeKeyInput');
+  const savedKey = Kit.store.get(KEY_STORE, '');
+  if (savedKey) { keyIn.value = savedKey; GameState.claudeApiKey = savedKey; }
+  keyIn.addEventListener('change', () => Kit.store.set(KEY_STORE, keyIn.value.trim()));
+
+  document.getElementById('replayBtn').addEventListener('click', () => { Kit.clearSave(ID); showScreen('titleScreen'); });
+  document.getElementById('continueBtn').addEventListener('click', () => { SoundManager.init(); startGame(); });
+
+  // ---------- セーブ ----------
+  function snapshot(dropImages) {
+    const gs = {};
+    STATE_KEYS.forEach(k => gs[k] = JSON.parse(JSON.stringify(GameState[k] ?? null)));
+    if (dropImages) gs.roundData = (gs.roundData || []).map(r => {
+      const d = Object.assign({}, r.actionData); if (d.imageData) { d.imageData = ''; d.imageDropped = true; }
+      return Object.assign({}, r, { actionData: d });
+    });
+    return { screen: currentScreenId, gs };
+  }
+  Kit.mount({ id: ID, title: '異種伝言ゲーム', onSave: () => {
+    if (currentScreenId !== 'gameScreen') return null; // 終わったゲームは保存しない
+    const s = snapshot(false);
+    s.__lite = () => snapshot(true); // 容量オーバー時は絵を省いて保存
+    return s;
+  }});
+
+  // ---------- 再開 ----------
+  const saved = Kit.load(ID);
+  if (saved && saved.gs) {
+    Object.assign(GameState, saved.gs);
+    // 設定トグルの表示を合わせる
+    [['playerCount', GameState.playerCount], ['difficulty', GameState.difficulty], ['gameModeToggle', GameState.gameMode]].forEach(([id, v]) => {
+      document.querySelectorAll(`#${id} .toggle-btn`).forEach(b => b.classList.toggle('active', String(b.dataset.value) === String(v)));
+    });
+    if (saved.screen === 'resultScreen') {
+      window.__ishuResuming = true; showResultScreen(); window.__ishuResuming = false;
+    } else {
+      // 手番の頭（「準備はいいですか？」）から再開。お題をのぞかれないように
+      showScreen('gameScreen'); renderPlayerTurn();
+    }
+    Kit.toast(`${GameState.currentPlayer}人目の番から再開します`);
+  }
+});
+</script>
+</body>
+</html>

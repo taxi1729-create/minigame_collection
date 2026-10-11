@@ -1,0 +1,140 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>ピタッと10秒 | あそびばこ</title>
+<link rel="stylesheet" href="../../kit/kit.css">
+<style>
+.dial{
+  position:relative;margin:8px auto 0;width:min(300px,78vw);aspect-ratio:1;border-radius:50%;
+  background:var(--k-label);border:4px solid var(--k-ink);box-shadow:6px 6px 0 var(--k-ink);
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+}
+.dial svg{position:absolute;inset:0;width:100%;height:100%;transform:rotate(-90deg)}
+.dial .num{font-family:var(--k-display);font-size:clamp(48px,15vw,68px);line-height:1;font-variant-numeric:tabular-nums;position:relative}
+.dial .num.hidden{color:var(--k-ink2);letter-spacing:.06em}
+.dial .unit{position:relative;font-weight:900;color:var(--k-ink2)}
+.tries{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-top:6px}
+.try{border:3px solid var(--k-ink);border-radius:10px;background:var(--k-label2);text-align:center;padding:6px 2px;font-weight:900;font-size:13px;min-height:54px;display:flex;flex-direction:column;justify-content:center}
+.try b{font-family:var(--k-display);font-weight:400;font-size:16px}
+.try.now{background:var(--k-yellow);color:#1d2440;transform:translateY(-3px)}
+.try.good{background:var(--k-teal);color:#fff}
+.verdict{text-align:center;min-height:62px}
+.verdict .d{font-family:var(--k-display);font-size:28px}
+</style>
+</head>
+<body class="kit">
+<main class="k-wrap k-stack">
+  <section class="k-panel k-center">
+    <span class="k-tag">ちょうど10.00秒で止めよう</span>
+    <div class="dial" id="dial">
+      <svg viewBox="0 0 120 120" aria-hidden="true">
+        <circle cx="60" cy="60" r="50" fill="none" stroke="var(--k-label2)" stroke-width="9"/>
+        <circle id="arc" cx="60" cy="60" r="50" fill="none" stroke="var(--k-pink)" stroke-width="9" stroke-linecap="round" stroke-dasharray="314.16" stroke-dashoffset="314.16"/>
+      </svg>
+      <div class="num" id="num" aria-live="off">0.00</div>
+      <div class="unit">秒</div>
+    </div>
+    <p class="k-hint">3秒たつと数字が消えます。心の中で数えて！</p>
+  </section>
+
+  <div class="verdict" id="verdict" aria-live="polite"></div>
+  <button class="k-btn k-btn--primary k-btn--big k-btn--block" id="main" data-se="none">スタート</button>
+
+  <section class="k-panel">
+    <span class="k-tag">5回チャレンジ</span>
+    <div class="tries" id="tries"></div>
+    <p class="k-hint" id="sum">誤差の合計が小さいほど高記録。±0.10秒以内は「ピタッ」</p>
+  </section>
+</main>
+
+<script src="../../kit/kit.js"></script>
+<script>
+(() => {
+'use strict';
+const ID = 'pitatto', TARGET = 10, HIDE_AT = 3, ROUNDS = 5, GOOD = 0.10;
+const $ = id => document.getElementById(id);
+const S = { tries: [], state: 'ready', t0: 0, raf: 0 };
+
+const saved = Kit.load(ID);
+if(saved && Array.isArray(saved.tries)) S.tries = saved.tries.slice(0, ROUNDS);
+
+Kit.mount({ id: ID, title: 'ピタッと10秒',
+  onSave: () => (S.tries.length > 0 && S.tries.length < ROUNDS) ? { tries: S.tries } : null });
+
+function renderTries(){
+  $('tries').innerHTML = Array.from({length:ROUNDS}, (_,i) => {
+    const t = S.tries[i];
+    if(t == null) return `<div class="try ${i===S.tries.length?'now':''}">${i+1}回目<b>—</b></div>`;
+    const d = t - TARGET;
+    return `<div class="try ${Math.abs(d)<=GOOD?'good':''}">${t.toFixed(2)}<b>${d>=0?'+':''}${d.toFixed(2)}</b></div>`;
+  }).join('');
+  const total = S.tries.reduce((a,t)=>a+Math.abs(t-TARGET),0);
+  const b = Kit.best(ID);
+  $('sum').textContent = S.tries.length
+    ? `誤差の合計 ${total.toFixed(2)}秒${b!=null?` ／ ベスト ${b.toFixed(2)}秒`:''}`
+    : `誤差の合計が小さいほど高記録。±0.10秒以内は「ピタッ」${b!=null?` ／ ベスト ${b.toFixed(2)}秒`:''}`;
+}
+function draw(sec){
+  const n = $('num');
+  if(S.state === 'run' && sec >= HIDE_AT){ n.textContent = '?.??'; n.classList.add('hidden'); }
+  else { n.textContent = sec.toFixed(2); n.classList.remove('hidden'); }
+  $('arc').style.strokeDashoffset = (314.16 * (1 - Math.min(sec, HIDE_AT)/TARGET)).toFixed(1);
+}
+let lastTick = -1;
+function loop(){
+  const sec = (performance.now() - S.t0)/1000;
+  const whole = Math.floor(sec);
+  if(whole !== lastTick && whole < HIDE_AT){ lastTick = whole; Kit.SE.play('tick'); }
+  draw(sec);
+  if(sec > 30){ stop(); return; }
+  S.raf = requestAnimationFrame(loop);
+}
+function start(){
+  S.state = 'run'; S.t0 = performance.now(); lastTick = -1;
+  $('verdict').innerHTML = ''; $('main').textContent = 'ストップ';
+  $('main').classList.replace('k-btn--primary','k-btn--teal');
+  Kit.SE.play('go'); loop();
+}
+async function stop(){
+  cancelAnimationFrame(S.raf);
+  const sec = Math.round((performance.now() - S.t0)/10)/100;
+  S.state = 'shown'; draw(sec);
+  const d = sec - TARGET, ad = Math.abs(d);
+  S.tries.push(sec); renderTries();
+  const sign = d >= 0 ? '+' : '';
+  const msg = ad <= .02 ? '神の指先' : ad <= GOOD ? 'ピタッ！' : ad <= .3 ? 'おしい！' : ad <= 1 ? 'まずまず' : '体内時計がズレてる…';
+  $('verdict').innerHTML = `<div class="d">${sign}${d.toFixed(2)}秒</div><div class="k-dim">${msg}</div>`;
+  $('main').classList.replace('k-btn--teal','k-btn--primary');
+  $('main').disabled = true;
+  if(ad <= GOOD) await Kit.celebrate({ title:'ピタッ!', sub:`${sec.toFixed(2)}秒`, ms:1800 });
+  else if(ad <= .3) Kit.SE.play('ok');
+  else Kit.SE.play('ng');
+  $('main').disabled = false;
+  if(S.tries.length >= ROUNDS) finish();
+  else $('main').textContent = `${S.tries.length+1}回目へ`;
+}
+async function finish(){
+  const total = S.tries.reduce((a,t)=>a+Math.abs(t-TARGET),0);
+  const rec = Kit.best(ID, Math.round(total*100)/100, (a,b)=>a<b);
+  Kit.clearSave(ID);
+  S.state = 'done';
+  $('main').textContent = 'もう一度チャレンジ';
+  if(total <= 1.0 || rec) await Kit.celebrate({ title: rec ? '新記録!' : 'クリア!', sub:`誤差合計 ${total.toFixed(2)}秒` });
+  else await Kit.fail({ title:'しゅうりょう', sub:`誤差合計 ${total.toFixed(2)}秒` });
+  renderTries();
+}
+$('main').addEventListener('click', () => {
+  Kit.SE.unlock();
+  if(S.state === 'run') return stop();
+  if(S.state === 'done'){ S.tries = []; renderTries(); }
+  start();
+});
+document.addEventListener('keydown', e => { if(e.code === 'Space' && !e.repeat){ e.preventDefault(); $('main').click(); } });
+renderTries(); draw(0);
+if(S.tries.length){ $('main').textContent = `${S.tries.length+1}回目から再開`; Kit.toast('つづきから再開します'); }
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,147 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>すべらせパズル | あそびばこ</title>
+<link rel="stylesheet" href="../../kit/kit.css">
+<style>
+.hud{display:flex;gap:10px;justify-content:space-between;align-items:center;flex-wrap:wrap}
+.stat{font-weight:900}
+.stat b{font-family:var(--k-display);font-weight:400;font-size:24px;margin-left:4px;font-variant-numeric:tabular-nums}
+.board{
+  --n:3;position:relative;width:min(440px,100%);aspect-ratio:1;margin:0 auto;
+  background:var(--k-ink);border:4px solid var(--k-ink);border-radius:16px;box-shadow:6px 6px 0 var(--k-pink);
+  padding:6px;touch-action:manipulation;
+}
+.tile{
+  position:absolute;width:calc((100% - 12px) / var(--n) - 6px);height:calc((100% - 12px) / var(--n) - 6px);
+  left:calc(6px + 3px + (100% - 12px) / var(--n) * var(--x));top:calc(6px + 3px + (100% - 12px) / var(--n) * var(--y));
+  border-radius:10px;border:3px solid var(--k-ink);
+  display:flex;align-items:center;justify-content:center;
+  font-family:var(--k-display);font-size:clamp(22px,calc(26vw / var(--n)),48px);color:#1d2440;
+  transition:left .12s ease, top .12s ease;padding:0;
+}
+.tile.ok{box-shadow:inset 0 -5px 0 rgba(0,0,0,.15)}
+.tile.c0{background:#ffd23f}.tile.c1{background:#7fd9d2}.tile.c2{background:#ffa3cf}.tile.c3{background:#a9c2ff}
+.board.solved .tile{animation:wave .5s ease calc(var(--i) * 40ms)}
+@keyframes wave{50%{transform:translateY(-10px)}}
+</style>
+</head>
+<body class="kit">
+<main class="k-wrap k-stack">
+  <div class="k-row" style="justify-content:space-between">
+    <div class="k-seg" id="size" role="group" aria-label="サイズ">
+      <button type="button" data-n="3" aria-pressed="true">3×3</button>
+      <button type="button" data-n="4" aria-pressed="false">4×4</button>
+    </div>
+    <button class="k-btn k-btn--sm" id="shuffle">シャッフル</button>
+  </div>
+  <div class="hud">
+    <span class="stat">手数<b id="moves">0</b></span>
+    <span class="stat">タイム<b id="time">0:00</b></span>
+    <span class="k-chip k-chip--yellow" id="best"></span>
+  </div>
+  <div class="board" id="board" aria-label="パズル盤面"></div>
+  <p class="k-hint k-center">空いたマスのとなりのタイルをタップ。1から順に、左上から並べよう。</p>
+</main>
+
+<script src="../../kit/kit.js"></script>
+<script>
+(() => {
+'use strict';
+const ID = 'slide-puzzle';
+const $ = id => document.getElementById(id);
+const S = { n:3, cells:[], moves:0, ms:0, started:false, solved:false };
+let t0 = 0, timer = 0;
+
+Kit.mount({ id: ID, title: 'すべらせパズル', onSave: () => {
+  if(S.solved || (!S.started && S.moves === 0)) return null;
+  pause();
+  return { n:S.n, cells:S.cells, moves:S.moves, ms:S.ms };
+}});
+
+const bestKey = () => ID + '.' + S.n;
+function solvedCells(n){ return [...Array(n*n-1).keys()].map(i=>i+1).concat(0); }
+function isSolved(){ return S.cells.every((v,i) => v === solvedCells(S.n)[i]); }
+function shuffle(){
+  // 解ける配置を保証するため、完成形からランダムに空白を動かす
+  const n = S.n; let cells = solvedCells(n), z = cells.length-1, prev = -1;
+  const steps = n === 3 ? 160 : 320;
+  for(let s=0;s<steps;s++){
+    const nb = neighbors(z, n).filter(i => i !== prev);
+    const p = nb[Math.floor(Math.random()*nb.length)];
+    [cells[z], cells[p]] = [cells[p], cells[z]]; prev = z; z = p;
+  }
+  if(cells.every((v,i)=>v===solvedCells(n)[i])) return shuffle();
+  Object.assign(S, {cells, moves:0, ms:0, started:false, solved:false});
+  pause(); render(true);
+}
+function neighbors(i, n){
+  const x = i % n, y = Math.floor(i/n), r = [];
+  if(x>0) r.push(i-1); if(x<n-1) r.push(i+1); if(y>0) r.push(i-n); if(y<n-1) r.push(i+n);
+  return r;
+}
+function render(rebuild){
+  const b = $('board'); b.style.setProperty('--n', S.n); b.classList.toggle('solved', S.solved);
+  if(rebuild || b.children.length !== S.n*S.n-1){
+    b.innerHTML = '';
+    for(let v=1; v<S.n*S.n; v++){
+      const t = document.createElement('button');
+      t.type = 'button'; t.className = 'tile'; t.dataset.v = v; t.dataset.se = 'none'; t.textContent = v;
+      const row = Math.floor((v-1)/S.n), col = (v-1)%S.n;
+      t.classList.add('c' + ((row + col) % 4));
+      t.style.setProperty('--i', v);
+      b.appendChild(t);
+    }
+  }
+  S.cells.forEach((v,i) => {
+    if(!v) return;
+    const t = b.querySelector(`[data-v="${v}"]`);
+    t.style.setProperty('--x', i % S.n); t.style.setProperty('--y', Math.floor(i/S.n));
+    t.classList.toggle('ok', v === i+1);
+    t.setAttribute('aria-label', `${v}のタイル`);
+  });
+  $('moves').textContent = S.moves; drawTime();
+  const best = Kit.best(bestKey());
+  $('best').textContent = best != null ? `ベスト ${best}手` : 'ベストなし';
+  document.querySelectorAll('#size button').forEach(x => x.setAttribute('aria-pressed', String(+x.dataset.n === S.n)));
+}
+function drawTime(){ const s = Math.floor(S.ms/1000); $('time').textContent = `${Math.floor(s/60)}:${String(s%60).padStart(2,'0')}`; }
+function play(){ if(timer) return; t0 = performance.now() - S.ms; timer = setInterval(() => { S.ms = performance.now() - t0; drawTime(); }, 250); }
+function pause(){ if(timer){ S.ms = performance.now() - t0; clearInterval(timer); timer = 0; } }
+
+$('board').addEventListener('click', async e => {
+  const t = e.target.closest('.tile'); if(!t || S.solved) return;
+  const i = S.cells.indexOf(+t.dataset.v), z = S.cells.indexOf(0);
+  if(!neighbors(z, S.n).includes(i)){ Kit.SE.play('tick'); Kit.shake(t); return; }
+  [S.cells[z], S.cells[i]] = [S.cells[i], S.cells[z]];
+  S.moves++; if(!S.started){ S.started = true; } play();
+  Kit.SE.play('slide'); render();
+  if(isSolved()){
+    S.solved = true; pause(); render(); Kit.clearSave(ID);
+    const rec = Kit.best(bestKey(), S.moves, (a,b)=>a<b);
+    if(S.n === 3) Kit.best(ID, S.moves, (a,b)=>a<b);
+    await Kit.celebrate({ title: rec ? '新記録!' : 'クリア!', sub:`${S.moves}手 ／ ${$('time').textContent}` });
+  }
+});
+$('shuffle').addEventListener('click', async () => {
+  if(S.moves && !S.solved && !await Kit.confirm('いまの盤面をすててシャッフルしますか？', {ok:'シャッフル'})) return;
+  Kit.SE.play('whoosh'); shuffle();
+});
+$('size').addEventListener('click', async e => {
+  const b = e.target.closest('button'); if(!b || +b.dataset.n === S.n) return;
+  if(S.moves && !S.solved && !await Kit.confirm('サイズを変えると、いまの盤面はリセットされます。', {ok:'変える'})) return;
+  S.n = +b.dataset.n; shuffle();
+});
+document.addEventListener('visibilitychange', () => { if(document.hidden) pause(); else if(S.started && !S.solved) play(); });
+
+const saved = Kit.load(ID);
+if(saved && saved.cells){
+  Object.assign(S, saved, {started:true, solved:false});
+  render(true); Kit.toast(`つづきから（${S.moves}手目）`);
+} else shuffle();
+})();
+</script>
+</body>
+</html>

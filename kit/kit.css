@@ -1,0 +1,203 @@
+/* =========================================================
+   あそびばこ 共通UIキット
+   段ボールの箱に貼った紙ラベル + リソグラフ風の二色ズレ影
+   ========================================================= */
+@import url('https://fonts.googleapis.com/css2?family=Dela+Gothic+One&family=Zen+Maru+Gothic:wght@500;700;900&display=swap');
+
+:root{
+  --k-board:#d6b58a;      /* 段ボール */
+  --k-board2:#c9a576;
+  --k-label:#fffdf7;      /* 紙ラベル */
+  --k-label2:#f3ecdf;
+  --k-ink:#1d2440;        /* 紺インク */
+  --k-ink2:#4a5170;
+  --k-pink:#ff4fa3;       /* 蛍光ピンク */
+  --k-teal:#00a3a1;       /* リソティール */
+  --k-yellow:#ffd23f;
+  --k-blue:#3a6fe0;
+  --k-red:#e8433a;
+  --k-green:#2fae62;
+  --k-on-accent:#fff;
+  --k-line:3px;
+  --k-r:14px;
+  --k-shadow:4px 4px 0 var(--k-ink);
+  --k-shadow-pink:4px 4px 0 var(--k-pink);
+  --k-display:"Dela Gothic One","Zen Maru Gothic",system-ui,sans-serif;
+  --k-body:"Zen Maru Gothic",system-ui,sans-serif;
+  color-scheme:light;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --k-board:#2b2520; --k-board2:#352d26;
+    --k-label:#3b342c; --k-label2:#463e35;
+    --k-ink:#f6ecdc; --k-ink2:#cdbfa9;
+    --k-shadow:4px 4px 0 #0e0b08;
+    color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --k-board:#2b2520; --k-board2:#352d26;
+  --k-label:#3b342c; --k-label2:#463e35;
+  --k-ink:#f6ecdc; --k-ink2:#cdbfa9;
+  --k-shadow:4px 4px 0 #0e0b08;
+  color-scheme:dark;
+}
+
+*,*::before,*::after{box-sizing:border-box}
+[hidden]{display:none !important}
+html,body{margin:0}
+body.kit{
+  min-height:100dvh;
+  background-color:var(--k-board);
+  /* 段ボールの繊維 */
+  background-image:
+    repeating-linear-gradient(90deg, transparent 0 7px, color-mix(in srgb,var(--k-board2) 55%,transparent) 7px 8px),
+    radial-gradient(circle at 20% 10%, color-mix(in srgb,#fff 10%,transparent), transparent 50%);
+  color:var(--k-ink);
+  font-family:var(--k-body);
+  font-weight:500;
+  line-height:1.7;
+  -webkit-tap-highlight-color:transparent;
+  -webkit-text-size-adjust:100%;
+}
+:where(.kit) button{font:inherit;color:inherit;cursor:pointer}
+:where(.kit) :focus-visible{outline:3px solid var(--k-teal);outline-offset:2px}
+
+/* ---------- トップバー（全ゲーム共通） ---------- */
+.k-bar{
+  position:sticky;top:0;z-index:50;
+  display:flex;align-items:center;gap:10px;
+  padding:10px 16px;padding-top:max(10px, env(safe-area-inset-top));
+  background:color-mix(in srgb,var(--k-board) 88%,transparent);
+  backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);
+  border-bottom:var(--k-line) solid var(--k-ink);
+}
+.k-bar__title{flex:1;min-width:0;font-family:var(--k-display);font-size:18px;letter-spacing:.04em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-align:center}
+.k-iconbtn{
+  flex:none;display:inline-flex;align-items:center;gap:6px;
+  height:40px;padding:0 12px;border-radius:999px;
+  background:var(--k-label);border:var(--k-line) solid var(--k-ink);
+  box-shadow:2px 2px 0 var(--k-ink);font-weight:900;font-size:14px;
+  transition:transform .08s, box-shadow .08s;
+}
+.k-iconbtn svg{width:20px;height:20px}
+.k-iconbtn:active{transform:translate(2px,2px);box-shadow:0 0 0 var(--k-ink)}
+.k-iconbtn.k-home{background:var(--k-yellow);color:#1d2440}
+.k-iconbtn.k-sound[aria-pressed="false"]{opacity:.6}
+
+/* ---------- レイアウト ---------- */
+.k-wrap{max-width:640px;margin:0 auto;padding:18px 16px 56px}
+.k-stack{display:flex;flex-direction:column;gap:14px}
+.k-row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.k-center{text-align:center}
+.k-grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+
+/* ---------- 紙ラベル（パネル） ---------- */
+.k-panel{
+  position:relative;background:var(--k-label);
+  border:var(--k-line) solid var(--k-ink);border-radius:var(--k-r);
+  box-shadow:var(--k-shadow);padding:18px 16px;
+}
+.k-panel--tape::before{ /* マスキングテープ */
+  content:"";position:absolute;top:-12px;left:50%;width:84px;height:22px;transform:translateX(-50%) rotate(-3deg);
+  background:color-mix(in srgb,var(--k-yellow) 75%,transparent);border:2px solid color-mix(in srgb,var(--k-ink) 25%,transparent);
+}
+.k-tag{
+  position:absolute;top:-14px;left:14px;background:var(--k-ink);color:var(--k-label);
+  font-weight:900;font-size:13px;padding:1px 12px;border-radius:999px;letter-spacing:.06em;
+}
+.k-h1{font-family:var(--k-display);font-weight:400;font-size:clamp(28px,8vw,40px);line-height:1.15;margin:0;letter-spacing:.03em}
+.k-h2{font-family:var(--k-display);font-weight:400;font-size:22px;line-height:1.3;margin:0}
+.k-big{font-family:var(--k-display);font-size:clamp(34px,11vw,56px);line-height:1.1}
+.k-dim{color:var(--k-ink2);font-size:14px}
+.k-hint{color:var(--k-ink2);font-size:13px;margin:4px 0 0}
+
+/* ---------- ボタン ---------- */
+.k-btn{
+  display:inline-flex;align-items:center;justify-content:center;gap:8px;
+  border:var(--k-line) solid var(--k-ink);border-radius:12px;
+  background:var(--k-label2);color:var(--k-ink);
+  font-family:var(--k-body);font-weight:900;font-size:16px;letter-spacing:.03em;
+  padding:11px 18px;min-height:46px;
+  box-shadow:var(--k-shadow);
+  transition:transform .08s, box-shadow .08s, filter .15s;
+  text-decoration:none;
+}
+.k-btn:active:not(:disabled){transform:translate(4px,4px);box-shadow:0 0 0 var(--k-ink)}
+.k-btn:disabled{opacity:.42;cursor:not-allowed}
+.k-btn--primary{background:var(--k-pink);color:var(--k-on-accent);box-shadow:4px 4px 0 var(--k-ink)}
+.k-btn--teal{background:var(--k-teal);color:var(--k-on-accent)}
+.k-btn--yellow{background:var(--k-yellow);color:#1d2440}
+.k-btn--ghost{background:transparent;box-shadow:none;border-style:dashed}
+.k-btn--ghost:active:not(:disabled){transform:none}
+.k-btn--block{display:flex;width:100%}
+.k-btn--big{font-size:19px;min-height:58px;padding:14px 20px}
+.k-btn--sm{font-size:13px;min-height:34px;padding:5px 12px;box-shadow:2px 2px 0 var(--k-ink)}
+
+/* ---------- 入力 ---------- */
+.k-input,.k-select,.k-textarea{
+  width:100%;font:inherit;font-size:16px;font-weight:700;color:var(--k-ink);
+  background:var(--k-label);border:var(--k-line) solid var(--k-ink);border-radius:10px;padding:10px 12px;
+}
+.k-textarea{min-height:96px;resize:vertical}
+.k-label{display:block;font-weight:900;font-size:14px;margin:6px 0 4px}
+
+/* セグメント（トグル） */
+.k-seg{display:flex;flex-wrap:wrap;gap:6px}
+.k-seg button{
+  border:var(--k-line) solid var(--k-ink);border-radius:999px;background:var(--k-label);
+  padding:6px 14px;font-weight:900;font-size:14px;box-shadow:2px 2px 0 var(--k-ink);
+}
+.k-seg button[aria-pressed="true"],.k-seg button.active{background:var(--k-teal);color:#fff}
+
+.k-chip{display:inline-block;border:2px solid var(--k-ink);border-radius:999px;padding:1px 10px;font-size:13px;font-weight:900;background:var(--k-label)}
+.k-chip--pink{background:var(--k-pink);color:#fff}
+.k-chip--teal{background:var(--k-teal);color:#fff}
+.k-chip--yellow{background:var(--k-yellow);color:#1d2440}
+
+/* ---------- 画面切替 ---------- */
+.k-screen{display:none}
+.k-screen.is-active{display:block;animation:k-in .22s ease}
+@keyframes k-in{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+
+/* ---------- トースト ---------- */
+.k-toast{
+  position:fixed;left:50%;bottom:calc(24px + env(safe-area-inset-bottom));transform:translate(-50%,20px);
+  z-index:200;opacity:0;pointer-events:none;
+  background:var(--k-ink);color:var(--k-label);font-weight:900;font-size:15px;
+  padding:10px 18px;border-radius:999px;box-shadow:3px 3px 0 var(--k-pink);
+  transition:opacity .2s, transform .2s;white-space:nowrap;
+}
+.k-toast.show{opacity:1;transform:translate(-50%,0)}
+
+/* ---------- クリア演出：スタンプ ---------- */
+.k-fx{position:fixed;inset:0;z-index:300;pointer-events:none;display:flex;align-items:center;justify-content:center}
+.k-fx canvas{position:absolute;inset:0;width:100%;height:100%}
+.k-stamp{
+  position:relative;text-align:center;
+  font-family:var(--k-display);color:var(--k-pink);
+  border:6px solid var(--k-pink);border-radius:18px;padding:10px 26px 14px;
+  background:color-mix(in srgb,var(--k-label) 85%,transparent);
+  text-shadow:3px 3px 0 color-mix(in srgb,var(--k-teal) 70%,transparent);
+  box-shadow:6px 6px 0 color-mix(in srgb,var(--k-teal) 60%,transparent);
+  animation:k-stamp .55s cubic-bezier(.2,1.6,.4,1) both;
+}
+.k-stamp b{display:block;font-weight:400;font-size:clamp(48px,16vw,92px);line-height:1.05;letter-spacing:.04em}
+.k-stamp small{display:block;font-family:var(--k-body);font-weight:900;font-size:16px;color:var(--k-ink);text-shadow:none;margin-top:2px}
+.k-stamp.is-fail{color:var(--k-ink2);border-color:var(--k-ink2);text-shadow:none;box-shadow:6px 6px 0 color-mix(in srgb,var(--k-ink) 25%,transparent);animation:k-thud .45s ease both}
+@keyframes k-stamp{0%{transform:scale(2.6) rotate(-14deg);opacity:0}60%{opacity:1}100%{transform:scale(1) rotate(-7deg);opacity:1}}
+@keyframes k-thud{0%{transform:translateY(-40px);opacity:0}70%{transform:translateY(4px);opacity:1}100%{transform:none}}
+.k-fx.out{animation:k-out .35s ease forwards}
+@keyframes k-out{to{opacity:0}}
+.k-shake{animation:k-shake .4s}
+@keyframes k-shake{20%,60%{transform:translateX(-6px)}40%,80%{transform:translateX(6px)}}
+
+/* ---------- 確認ダイアログ ---------- */
+.k-modal{position:fixed;inset:0;z-index:250;display:flex;align-items:center;justify-content:center;padding:20px;background:color-mix(in srgb,#1d2440 45%,transparent)}
+.k-modal[hidden]{display:none}
+.k-modal .k-panel{width:min(420px,100%);animation:k-pop .22s cubic-bezier(.2,1.4,.4,1)}
+@keyframes k-pop{from{transform:scale(.9);opacity:0}to{transform:none;opacity:1}}
+
+@media (prefers-reduced-motion: reduce){
+  *{animation-duration:.01ms !important;transition-duration:.01ms !important}
+}

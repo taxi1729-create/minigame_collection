@@ -1,0 +1,74 @@
+/* 異種伝言ゲーム → あそびばこ共通UIへの上書き */
+:root{
+  --bg-main:var(--k-board); --bg-card:var(--k-label); --bg-card2:var(--k-label2);
+  --accent-coral:var(--k-pink); --accent-orange:var(--k-pink); --accent-yellow:var(--k-yellow);
+  --accent-mint:var(--k-teal); --accent-sky:var(--k-blue); --accent-violet:#9b4f9e; --accent-pink:var(--k-pink);
+  --text-primary:var(--k-ink); --text-secondary:var(--k-ink2); --text-dim:var(--k-ink2);
+  --border-base:var(--k-ink);
+  --font-display:var(--k-body); --font-body:var(--k-body);
+  --shadow-card:var(--k-shadow); --shadow-btn:var(--k-shadow);
+  --radius-lg:14px; --radius-xl:999px;
+}
+body.kit{max-width:none;margin:0;user-select:auto}
+#app{max-width:520px;margin:0 auto}
+.screen{min-height:auto;padding:18px 16px 40px}
+
+/* 見出しはディスプレイ書体 */
+.confirm-title,.action-title,.topic-text,.my-modifier-topic,.result-title,.judge-result-title,
+.halftalk-big-count,.gesture-hint-chars,.correct-value,.result-emoji{font-family:var(--k-display);font-weight:400}
+
+/* タイトル */
+.ishu-title{width:100%;text-align:center}
+.ishu-title .k-h1{margin-top:6px}
+.ishu-title p{margin:8px 0 0;font-weight:900}
+
+/* カード類：太線 + ずらし影 */
+.setting-row,.action-card,.gesture-stage,.action-history,.drawing-toolbar,.shapes-toolbar,.verbal-hint-box,
+.prev-hint-box,.my-modifier-box,.current-topic-display,.correct-answer-reveal,.judge-result-box,.topic-text{
+  border:3px solid var(--k-ink) !important;box-shadow:var(--k-shadow) !important;background:var(--k-label);
+}
+.prev-hint-box{background:color-mix(in srgb,var(--k-blue) 10%,var(--k-label))}
+.my-modifier-box,.topic-text{background:color-mix(in srgb,var(--k-pink) 10%,var(--k-label))}
+.current-topic-display,.correct-answer-reveal{background:color-mix(in srgb,var(--k-yellow) 25%,var(--k-label))}
+.judge-result-box.correct{background:color-mix(in srgb,var(--k-teal) 18%,var(--k-label))}
+.judge-result-box.wrong{background:color-mix(in srgb,var(--k-pink) 14%,var(--k-label))}
+.action-card:hover:not(.locked){transform:none;box-shadow:var(--k-shadow)}
+.action-card:active:not(.locked){transform:translate(4px,4px);box-shadow:0 0 0 var(--k-ink) !important}
+.action-card::before{display:none}
+.action-icon svg{stroke:var(--k-ink);filter:none}
+.action-card .action-icon{background:var(--k-yellow);border:3px solid var(--k-ink);border-radius:50%;width:54px;height:54px}
+.action-card .action-icon svg{width:32px;height:32px}
+.history-item{background:var(--k-label2);border:2px solid var(--k-ink)}
+
+/* ボタン */
+.btn{border:3px solid var(--k-ink);border-radius:12px;box-shadow:var(--k-shadow);font-weight:900;color:var(--k-ink);background:var(--k-label2);transition:transform .08s, box-shadow .08s}
+.btn:active:not(:disabled){transform:translate(4px,4px);box-shadow:0 0 0 var(--k-ink)}
+.btn-primary,.btn-start,.btn-danger{background:var(--k-pink);color:#fff;box-shadow:var(--k-shadow);text-shadow:none;animation:none}
+.btn-success{background:var(--k-teal);color:#fff;box-shadow:var(--k-shadow)}
+.btn-secondary{background:var(--k-label);color:var(--k-ink)}
+.btn-primary:hover:not(:disabled),.btn-start:hover,.btn-success:hover,.btn-danger:hover,.btn-secondary:hover:not(:disabled){transform:none;box-shadow:var(--k-shadow)}
+.btn-start{font-size:19px;padding:16px;border-radius:12px}
+.btn-reselect{box-shadow:none;border-style:dashed;background:transparent}
+
+/* トグル・ツール */
+.toggle-btn,.size-btn,.tool-btn,.shape-add-btn{border:3px solid var(--k-ink);background:var(--k-label);color:var(--k-ink);box-shadow:2px 2px 0 var(--k-ink);border-radius:999px}
+.tool-btn,.shape-add-btn{border-radius:12px}
+.toggle-btn:hover,.size-btn:hover,.tool-btn:hover,.shape-add-btn:hover{transform:none;border-color:var(--k-ink);color:var(--k-ink);background:var(--k-label)}
+.toggle-btn.active,.size-btn.active,.tool-btn.active{background:var(--k-teal);color:#fff;border-color:var(--k-ink);box-shadow:2px 2px 0 var(--k-ink)}
+.api-key-input,.answer-input{border:3px solid var(--k-ink);background:var(--k-label);color:var(--k-ink);font-family:var(--k-body);font-weight:700}
+.draw-canvas,.shapes-canvas,.bug-base-img,.result-drawing{border:3px solid var(--k-ink)}
+
+/* プレイヤーヘッダー */
+.player-header{position:static;margin:-18px -16px 16px;background:var(--k-label2);border-bottom:3px solid var(--k-ink);backdrop-filter:none}
+.player-badge{background:var(--k-pink);border:3px solid var(--k-ink);box-shadow:2px 2px 0 var(--k-ink);font-family:var(--k-display);font-weight:400}
+.progress-dot{border:2px solid var(--k-ink);background:var(--k-label)}
+.progress-dot.done{background:var(--k-teal);border-color:var(--k-ink);box-shadow:none}
+.progress-dot.current{background:var(--k-pink);border-color:var(--k-ink);box-shadow:none}
+.confirm-icon{background:var(--k-yellow);border:3px solid var(--k-ink);box-shadow:var(--k-shadow)}
+.confirm-icon svg{stroke:var(--k-ink)}
+.private-warning{background:var(--k-yellow);color:#1d2440;border:3px solid var(--k-ink)}
+.category-badge,.modifier-chip,.action-badge,.setting-badge{background:var(--k-label);color:var(--k-ink);border:2px solid var(--k-ink)}
+.result-title.correct{color:var(--k-teal);text-shadow:3px 3px 0 var(--k-ink)}
+.result-title.wrong{color:var(--k-pink);text-shadow:3px 3px 0 var(--k-ink)}
+.loading-spinner{border-color:color-mix(in srgb,var(--k-ink) 20%,transparent);border-top-color:var(--k-pink)}
+.confetti-container{display:none}

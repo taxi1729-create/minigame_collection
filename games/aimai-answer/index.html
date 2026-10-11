@@ -1,0 +1,384 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>あいまいアンサー | あそびばこ</title>
+<link rel="stylesheet" href="../../kit/kit.css">
+<style>
+.plist{display:grid;gap:8px}
+.prow{display:grid;grid-template-columns:34px 1fr 40px;gap:8px;align-items:center}
+.prow .no{width:34px;height:34px;border-radius:50%;border:3px solid var(--k-ink);background:var(--k-yellow);color:#1d2440;display:flex;align-items:center;justify-content:center;font-weight:900}
+.prow .del{width:40px;height:40px;border-radius:10px;border:3px solid var(--k-ink);background:var(--k-label2);font-weight:900}
+.secret{
+  text-align:center;padding:26px 14px;border:4px dashed var(--k-pink);border-radius:16px;background:var(--k-label);
+}
+.secret .topic{font-family:var(--k-display);font-size:clamp(40px,13vw,64px);line-height:1.15;word-break:keep-all;overflow-wrap:anywhere}
+.secret .genre{display:inline-block;margin-bottom:8px}
+.meter{display:flex;justify-content:space-between;font-size:12px;font-weight:900;color:var(--k-ink2);margin-top:12px}
+.scale{position:relative;height:18px;border:3px solid var(--k-ink);border-radius:99px;background:linear-gradient(90deg,var(--k-teal) 0 33%,var(--k-yellow) 33% 66%,var(--k-pink) 66%)}
+.hintbig{font-family:var(--k-display);font-size:clamp(30px,9vw,46px);line-height:1.3;text-align:center;padding:10px 4px;overflow-wrap:anywhere}
+.ring{width:150px;height:150px;margin:6px auto;position:relative}
+.ring svg{width:100%;height:100%;transform:rotate(-90deg)}
+.ring b{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-family:var(--k-display);font-weight:400;font-size:44px}
+.who{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:10px}
+.who button{
+  min-height:56px;border:3px solid var(--k-ink);border-radius:14px;background:var(--k-label);box-shadow:var(--k-shadow);
+  font-weight:900;font-size:16px;display:flex;align-items:center;justify-content:center;gap:6px;padding:6px 8px;
+}
+.who button[aria-pressed="true"]{background:var(--k-teal);color:#fff}
+.who button[aria-pressed="true"]::before{content:"○";font-size:20px}
+.who button:active{transform:translate(4px,4px);box-shadow:0 0 0 var(--k-ink)}
+.preview{text-align:center;font-weight:900;min-height:28px}
+.board{display:grid;gap:8px}
+.brow{display:grid;grid-template-columns:30px 1fr auto;gap:10px;align-items:center;border:3px solid var(--k-ink);border-radius:12px;background:var(--k-label);padding:8px 12px}
+.brow.me{background:color-mix(in srgb,var(--k-yellow) 45%,var(--k-label))}
+.brow .rk{font-family:var(--k-display);font-size:20px;text-align:center}
+.brow .pt{font-family:var(--k-display);font-size:24px}
+.brow .gain{font-size:13px;font-weight:900;color:var(--k-pink);margin-left:6px}
+.verdict{font-family:var(--k-display);font-size:clamp(28px,9vw,40px);text-align:center;line-height:1.25}
+.rule{margin:0;padding-left:20px;font-size:14px}
+.rule li{margin:2px 0}
+</style>
+</head>
+<body class="kit">
+<main class="k-wrap">
+
+  <!-- 設定 -->
+  <section class="k-screen is-active k-stack" id="sSetup">
+    <div class="k-panel k-panel--tape k-center">
+      <h1 class="k-h1" style="margin-top:6px">あいまいアンサー</h1>
+      <p style="margin:8px 0 0;font-weight:900">伝えすぎたら0点。<br>一部の人にだけ伝わる、ちょうどいいヒントを。</p>
+    </div>
+    <div class="k-panel">
+      <span class="k-tag">あそぶ人</span>
+      <div class="plist" id="plist" style="margin-top:8px"></div>
+      <button class="k-btn k-btn--sm" id="addP" style="margin-top:10px">＋ 追加</button>
+      <p class="k-hint">3〜8人。出題者が順番に回ります。</p>
+    </div>
+    <div class="k-panel">
+      <span class="k-tag">ルール</span>
+      <label class="k-label" style="margin-top:8px">お題のジャンル</label>
+      <div class="k-seg" id="genreSeg"></div>
+      <label class="k-label">1人あたりの出題回数</label>
+      <div class="k-seg" id="laps"><button type="button" data-v="1" aria-pressed="true">1回</button><button type="button" data-v="2" aria-pressed="false">2回</button><button type="button" data-v="3" aria-pressed="false">3回</button></div>
+      <label class="k-label">考える時間</label>
+      <div class="k-seg" id="think"><button type="button" data-v="20" aria-pressed="false">20秒</button><button type="button" data-v="40" aria-pressed="true">40秒</button><button type="button" data-v="60" aria-pressed="false">60秒</button></div>
+    </div>
+    <div class="k-panel">
+      <span class="k-tag">点数</span>
+      <ul class="rule" style="margin-top:8px">
+        <li>一部の人だけ正解 → 出題者 <b>+3</b>、正解者 <b>+2</b></li>
+        <li>正解者がちょうど1人 → 出題者にさらに <b>+1</b>（ピンポイント）</li>
+        <li>全員正解（伝えすぎ） → 出題者 0、正解者 +1</li>
+        <li>全員不正解（あいまいすぎ） → だれも得点なし</li>
+      </ul>
+    </div>
+    <button class="k-btn k-btn--primary k-btn--big k-btn--block" id="btnStart" data-se="start">ゲームスタート</button>
+  </section>
+
+  <!-- 手渡し -->
+  <section class="k-screen k-stack" id="sPass">
+    <div class="k-panel k-center" style="padding:30px 16px">
+      <p class="k-dim" id="passRound" style="margin:0"></p>
+      <div class="k-big" id="passName" style="margin:6px 0"></div>
+      <p style="margin:0;font-weight:900">さんが出題者です</p>
+      <p class="k-hint" style="margin-top:14px">スマホを出題者に渡してください。<br>ほかの人は画面を見ないで！</p>
+    </div>
+    <button class="k-btn k-btn--primary k-btn--big k-btn--block" id="btnSeeTopic" data-se="whoosh">お題を見る</button>
+    <div class="k-panel">
+      <span class="k-tag">いまの得点</span>
+      <div class="board" id="miniBoard" style="margin-top:8px"></div>
+    </div>
+  </section>
+
+  <!-- お題（出題者だけ） -->
+  <section class="k-screen k-stack" id="sTopic">
+    <div class="secret">
+      <span class="k-chip k-chip--pink genre" id="tGenre"></span>
+      <div class="topic" id="tWord"></div>
+      <div class="meter"><span>あいまいすぎ</span><span>ちょうどいい</span><span>伝えすぎ</span></div>
+      <div class="scale" aria-hidden="true"></div>
+    </div>
+    <div class="k-panel">
+      <span class="k-tag">ヒント</span>
+      <label class="k-label" for="hintIn" style="margin-top:8px">ひとことヒント（画面に出す場合）</label>
+      <input class="k-input" id="hintIn" maxlength="30" placeholder="例）ちょっと高いところにある" autocomplete="off">
+      <p class="k-hint">お題の言葉そのもの・読み・翻訳はNG。口で言うなら空欄でOK。</p>
+    </div>
+    <div class="k-grid2">
+      <button class="k-btn" id="btnChange">お題チェンジ</button>
+      <button class="k-btn k-btn--primary" id="btnHint" data-se="start">みんなに見せる</button>
+    </div>
+  </section>
+
+  <!-- 考える -->
+  <section class="k-screen k-stack" id="sGuess">
+    <div class="k-panel">
+      <span class="k-tag" id="gBy"></span>
+      <div class="hintbig" id="gHint"></div>
+    </div>
+    <div class="ring" id="ring">
+      <svg viewBox="0 0 120 120" aria-hidden="true">
+        <circle cx="60" cy="60" r="50" fill="var(--k-label)" stroke="var(--k-ink)" stroke-width="4"/>
+        <circle id="arc" cx="60" cy="60" r="42" fill="none" stroke="var(--k-teal)" stroke-width="12" stroke-dasharray="263.9" stroke-dashoffset="0"/>
+      </svg>
+      <b id="gTime">40</b>
+    </div>
+    <p class="k-center" style="margin:0;font-weight:900">答えを紙やスマホにこっそりメモ。<br>時間になったら、いっせいに発表！</p>
+    <button class="k-btn k-btn--primary k-btn--big k-btn--block" id="btnOpen">答え合わせ</button>
+  </section>
+
+  <!-- 答え合わせ -->
+  <section class="k-screen k-stack" id="sReveal">
+    <div class="secret" style="border-style:solid;border-color:var(--k-teal)">
+      <span class="k-chip genre">正解は</span>
+      <div class="topic" id="rWord"></div>
+    </div>
+    <div class="k-panel">
+      <span class="k-tag">正解した人をタップ</span>
+      <div class="who" id="who" style="margin-top:10px"></div>
+      <p class="preview" id="preview" style="margin:12px 0 0"></p>
+    </div>
+    <button class="k-btn k-btn--primary k-btn--big k-btn--block" id="btnScore">得点を確定</button>
+  </section>
+
+  <!-- ラウンド結果 -->
+  <section class="k-screen k-stack" id="sScore">
+    <div class="k-panel k-center">
+      <div class="verdict" id="vTitle"></div>
+      <p class="k-dim" id="vSub" style="margin:4px 0 0"></p>
+    </div>
+    <div class="k-panel">
+      <span class="k-tag">得点</span>
+      <div class="board" id="board" style="margin-top:8px"></div>
+    </div>
+    <button class="k-btn k-btn--primary k-btn--big k-btn--block" id="btnNext"></button>
+  </section>
+
+  <!-- 最終結果 -->
+  <section class="k-screen k-stack" id="sFinal">
+    <div class="k-panel k-panel--tape k-center">
+      <p class="k-dim" style="margin:8px 0 0">いちばん「あいまい」が上手だったのは</p>
+      <div class="k-big" id="fWin"></div>
+    </div>
+    <div class="k-panel">
+      <span class="k-tag">最終順位</span>
+      <div class="board" id="fBoard" style="margin-top:8px"></div>
+    </div>
+    <div class="k-grid2">
+      <button class="k-btn" id="btnSame">同じメンバーで</button>
+      <button class="k-btn k-btn--primary" id="btnSetup">設定にもどる</button>
+    </div>
+  </section>
+</main>
+
+<script src="../../kit/kit.js"></script>
+<script>
+(() => {
+'use strict';
+const ID = 'aimai-answer';
+const TOPICS = {
+  'たべもの':['カレーライス','たこ焼き','おにぎり','ラーメン','ショートケーキ','納豆','すいか','ポップコーン','焼き芋','チョコレート','ピザ','うどん','かき氷','目玉焼き','バナナ','梅干し','餃子','わたあめ','とうもろこし','ハンバーガー'],
+  'どうぶつ':['キリン','ペンギン','パンダ','カメレオン','フラミンゴ','ナマケモノ','ハリネズミ','イルカ','カピバラ','ゴリラ','コアラ','フクロウ','タコ','カブトムシ','ラクダ','シマウマ','カンガルー','クラゲ','アルパカ','ハムスター'],
+  'ばしょ':['遊園地','図書館','コンビニ','温泉','動物園','映画館','空港','美容室','水族館','神社','歯医者','キャンプ場','カラオケ','銭湯','屋上','教室','ゲームセンター','無人島','観覧車','駅のホーム'],
+  'もの':['傘','スマートフォン','掃除機','ハサミ','目覚まし時計','消しゴム','自転車','ドライヤー','冷蔵庫','鏡','風鈴','トランプ','ろうそく','マスク','サングラス','リモコン','ハンガー','風船','地球儀','ホッチキス'],
+  'イベント':['お正月','誕生日','運動会','花火大会','結婚式','卒業式','バレンタイン','ハロウィン','クリスマス','修学旅行','夏祭り','お花見','入学式','大掃除','ひな祭り','引っ越し','初詣','文化祭','年越し','健康診断'],
+};
+const GENRES = ['おまかせ', ...Object.keys(TOPICS)];
+const $ = id => document.getElementById(id);
+const esc = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+const fresh = () => ({
+  phase:'setup', players:['プレイヤー1','プレイヤー2','プレイヤー3'], genre:'おまかせ', laps:1, think:40,
+  scores:[], turn:0, topic:null, topicGenre:'', hint:'', correct:[], used:[], changed:false, lastGain:null,
+});
+let S = fresh();
+const saved = Kit.load(ID);
+if(saved && saved.phase){ S = Object.assign(fresh(), saved); }
+
+Kit.mount({ id: ID, title: 'あいまいアンサー', onSave: () => {
+  if(S.phase === 'final') return null;
+  const snap = JSON.parse(JSON.stringify(S));
+  snap.hint = $('hintIn').value || S.hint;
+  return snap;
+}});
+
+const total = () => S.players.length * S.laps;
+const hinter = () => S.turn % S.players.length;
+
+/* ---------- 設定 ---------- */
+function drawPlayers(){
+  $('plist').innerHTML = S.players.map((p,i) => `
+    <div class="prow"><span class="no">${i+1}</span>
+      <input class="k-input" value="${esc(p)}" data-i="${i}" maxlength="10" aria-label="${i+1}人目の名前">
+      <button class="del" data-i="${i}" aria-label="${i+1}人目を削除" ${S.players.length<=3?'disabled':''}>×</button></div>`).join('');
+  $('addP').disabled = S.players.length >= 8;
+}
+$('plist').addEventListener('input', e => { if(e.target.dataset.i != null && e.target.tagName === 'INPUT') S.players[+e.target.dataset.i] = e.target.value; });
+$('plist').addEventListener('click', e => { const b = e.target.closest('.del'); if(!b) return; S.players.splice(+b.dataset.i,1); drawPlayers(); });
+$('addP').addEventListener('click', () => { S.players.push(`プレイヤー${S.players.length+1}`); drawPlayers(); });
+function seg(el, key, cast){
+  el.addEventListener('click', e => {
+    const b = e.target.closest('button'); if(!b) return;
+    S[key] = cast(b.dataset.v);
+    el.querySelectorAll('button').forEach(x => x.setAttribute('aria-pressed', String(x === b)));
+  });
+  el.querySelectorAll('button').forEach(x => x.setAttribute('aria-pressed', String(cast(x.dataset.v) === S[key])));
+}
+$('genreSeg').innerHTML = GENRES.map(g => `<button type="button" data-v="${g}">${g}</button>`).join('');
+seg($('genreSeg'), 'genre', String); seg($('laps'), 'laps', Number); seg($('think'), 'think', Number);
+
+$('btnStart').addEventListener('click', () => {
+  S.players = S.players.map((p,i) => p.trim() || `プレイヤー${i+1}`);
+  const uniq = new Set(S.players); if(uniq.size !== S.players.length){ Kit.toast('名前が重なっています'); return; }
+  S.scores = S.players.map(()=>0); S.turn = 0; S.used = [];
+  toPass();
+});
+
+/* ---------- ラウンド ---------- */
+function pickTopic(){
+  const gs = S.genre === 'おまかせ' ? Object.keys(TOPICS) : [S.genre];
+  let pool = [];
+  gs.forEach(g => TOPICS[g].forEach(t => { if(!S.used.includes(t)) pool.push([g,t]); }));
+  if(!pool.length){ S.used = []; return pickTopic(); }
+  const [g,t] = pool[Math.floor(Math.random()*pool.length)];
+  S.topic = t; S.topicGenre = g; S.used.push(t);
+}
+function boardHtml(order, gains){
+  const sorted = order ? S.players.map((p,i)=>i).sort((a,b)=>S.scores[b]-S.scores[a]) : S.players.map((p,i)=>i);
+  let rank = 0, prev = null;
+  return sorted.map((i,k) => {
+    if(S.scores[i] !== prev){ rank = k+1; prev = S.scores[i]; }
+    const g = gains && gains[i] ? `<span class="gain">+${gains[i]}</span>` : '';
+    return `<div class="brow ${i===hinter()&&S.phase!=='final'?'me':''}"><span class="rk">${order?rank:i+1}</span><span>${esc(S.players[i])}${i===hinter()&&S.phase!=='final'?' <span class="k-chip k-chip--pink">出題</span>':''}</span><span><span class="pt">${S.scores[i]}</span>${g}</span></div>`;
+  }).join('');
+}
+function toPass(){
+  S.phase = 'pass'; S.topic = null; S.hint = ''; S.correct = []; S.changed = false; S.lastGain = null;
+  $('passRound').textContent = `ラウンド ${S.turn+1} / ${total()}`;
+  $('passName').textContent = S.players[hinter()];
+  $('miniBoard').innerHTML = boardHtml(false);
+  Kit.screen('sPass');
+}
+$('btnSeeTopic').addEventListener('click', () => { if(!S.topic) pickTopic(); toTopic(); });
+function toTopic(){
+  S.phase = 'topic';
+  $('tGenre').textContent = S.topicGenre; $('tWord').textContent = S.topic;
+  $('hintIn').value = S.hint || '';
+  $('btnChange').disabled = S.changed;
+  $('btnChange').textContent = S.changed ? 'チェンジ済み' : 'お題チェンジ（1回）';
+  Kit.screen('sTopic');
+}
+$('btnChange').addEventListener('click', () => {
+  if(S.changed) return; S.changed = true; pickTopic(); Kit.SE.play('whoosh'); toTopic();
+});
+$('btnHint').addEventListener('click', () => {
+  const h = $('hintIn').value.trim();
+  if(h && (h.includes(S.topic))){ Kit.toast('お題そのものはヒントに使えません'); Kit.shake($('hintIn')); Kit.SE.play('ng'); return; }
+  S.hint = h; toGuess();
+});
+
+let tm = 0;
+function toGuess(){
+  S.phase = 'guess';
+  $('gBy').textContent = `${S.players[hinter()]} さんのヒント`;
+  $('gHint').textContent = S.hint || '（口で言います）';
+  Kit.screen('sGuess');
+  const end = performance.now() + S.think*1000; let last = S.think;
+  clearInterval(tm);
+  const draw = left => {
+    $('gTime').textContent = Math.ceil(left);
+    $('arc').style.strokeDashoffset = (263.9*(1-left/S.think)).toFixed(1);
+    $('arc').style.stroke = left <= 5 ? 'var(--k-pink)' : 'var(--k-teal)';
+  };
+  draw(S.think);
+  tm = setInterval(() => {
+    const left = Math.max(0,(end-performance.now())/1000); draw(left);
+    const s = Math.ceil(left);
+    if(s !== last){ last = s; if(s <= 5 && s > 0) Kit.SE.play('count'); }
+    if(left <= 0){ clearInterval(tm); Kit.SE.play('buzz'); $('gTime').textContent = '発表!'; $('gTime').style.fontSize = '30px'; }
+  }, 100);
+  $('gTime').style.fontSize = '';
+}
+$('btnOpen').addEventListener('click', () => { clearInterval(tm); toReveal(); });
+
+function guessers(){ return S.players.map((p,i)=>i).filter(i => i !== hinter()); }
+function calc(){
+  const gs = guessers(), k = S.correct.length, m = gs.length, gain = S.players.map(()=>0);
+  let kind;
+  if(k === 0) kind = 'none';
+  else if(k === m){ kind = 'all'; S.correct.forEach(i => gain[i] = 1); }
+  else { kind = 'good'; gain[hinter()] = 3 + (k === 1 ? 1 : 0); S.correct.forEach(i => gain[i] = 2); }
+  return {kind, gain, k, m};
+}
+function toReveal(){
+  S.phase = 'reveal';
+  $('rWord').textContent = S.topic;
+  Kit.screen('sReveal'); Kit.SE.play('pop'); drawWho();
+}
+function drawWho(){
+  $('who').innerHTML = guessers().map(i => `<button type="button" data-i="${i}" data-se="select" aria-pressed="${S.correct.includes(i)}">${esc(S.players[i])}</button>`).join('');
+  const {kind,k,m,gain} = calc();
+  $('preview').textContent = kind === 'none' ? `0 / ${m}人 正解 → あいまいすぎ（得点なし）`
+    : kind === 'all' ? `${k} / ${m}人 正解 → 伝えすぎ！出題者 0点`
+    : `${k} / ${m}人 正解 → 出題者 +${gain[hinter()]}`;
+}
+$('who').addEventListener('click', e => {
+  const b = e.target.closest('button'); if(!b) return;
+  const i = +b.dataset.i, at = S.correct.indexOf(i);
+  if(at >= 0) S.correct.splice(at,1); else S.correct.push(i);
+  drawWho();
+});
+$('btnScore').addEventListener('click', async () => {
+  const r = calc();
+  r.gain.forEach((g,i) => S.scores[i] += g);
+  S.lastGain = r.gain; S.lastKind = r.kind;
+  showScore();
+  if(r.kind === 'good') await Kit.celebrate({ title: r.k === 1 ? 'ピンポイント!' : 'あいまい成功!', sub:`${S.players[hinter()]} +${r.gain[hinter()]}点`, ms:2000 });
+  else if(r.kind === 'all') await Kit.fail({ title:'伝えすぎ!', sub:'全員正解で出題者は0点' });
+  else await Kit.fail({ title:'あいまいすぎ…', sub:'だれにも伝わらなかった' });
+});
+function showScore(){
+  S.phase = 'score';
+  const k = S.lastKind;
+  $('vTitle').textContent = k === 'good' ? 'ちょうどいい、あいまい！' : k === 'all' ? '伝えすぎでした' : 'あいまいすぎました';
+  $('vSub').textContent = `お題「${S.topic}」 ／ ヒント「${S.hint || '口頭'}」`;
+  $('board').innerHTML = boardHtml(true, S.lastGain);
+  $('btnNext').textContent = S.turn+1 >= total() ? '最終結果へ' : '次のラウンドへ';
+  Kit.screen('sScore');
+}
+$('btnNext').addEventListener('click', () => {
+  S.turn++;
+  if(S.turn >= total()) return toFinal();
+  toPass();
+});
+async function toFinal(){
+  S.phase = 'final';
+  const top = Math.max(...S.scores);
+  const wins = S.players.filter((p,i) => S.scores[i] === top);
+  $('fWin').textContent = wins.join('・');
+  $('fBoard').innerHTML = boardHtml(true);
+  Kit.screen('sFinal'); Kit.clearSave(ID);
+  await Kit.celebrate({ title:'優勝!', sub:`${wins.join('・')}（${top}点）`, ms:2800 });
+}
+$('btnSame').addEventListener('click', () => { S.scores = S.players.map(()=>0); S.turn = 0; S.used = []; Kit.SE.play('start'); toPass(); });
+$('btnSetup').addEventListener('click', () => { S.phase = 'setup'; drawPlayers(); Kit.screen('sSetup'); });
+
+/* ---------- 起動・再開 ---------- */
+drawPlayers();
+if(saved && saved.phase && saved.phase !== 'setup'){
+  // お題が見える画面からの再開は、のぞき見防止のため手渡し画面にもどす
+  if(S.phase === 'pass' || S.phase === 'topic' || S.phase === 'guess'){
+    const keepTopic = S.topic, keepHint = S.hint, keepChanged = S.changed;
+    toPass();
+    S.topic = keepTopic; S.hint = keepHint; S.changed = keepChanged;
+  }
+  else if(S.phase === 'reveal') toReveal();
+  else if(S.phase === 'score') showScore();
+  Kit.toast('つづきから再開します');
+}
+})();
+</script>
+</body>
+</html>

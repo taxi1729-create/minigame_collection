@@ -1,0 +1,167 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>いろことば | あそびばこ</title>
+<link rel="stylesheet" href="../../kit/kit.css">
+<style>
+.hud{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px}
+.hud .k-panel{padding:8px 6px;text-align:center}
+.hud b{display:block;font-family:var(--k-display);font-weight:400;font-size:26px;line-height:1.2;font-variant-numeric:tabular-nums}
+.hud span{font-size:12px;font-weight:900;color:var(--k-ink2)}
+.timebar{height:16px;border:3px solid var(--k-ink);border-radius:99px;background:var(--k-label);overflow:hidden}
+.timebar i{display:block;height:100%;width:100%;background:var(--k-teal);transform-origin:left;transition:transform .1s linear}
+.timebar.low i{background:var(--k-pink)}
+.card{
+  min-height:190px;display:flex;align-items:center;justify-content:center;
+  font-family:var(--k-display);font-size:clamp(64px,22vw,110px);line-height:1;
+  background:var(--k-label);border:4px solid var(--k-ink);border-radius:18px;box-shadow:6px 6px 0 var(--k-ink);
+  user-select:none;-webkit-user-select:none;position:relative;
+}
+.card.pop{animation:pop .18s ease}
+@keyframes pop{from{transform:scale(.88)}to{transform:none}}
+.card .combo{position:absolute;top:10px;right:14px;font-family:var(--k-body);font-weight:900;font-size:15px;color:var(--k-pink)}
+.answers{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.ans{min-height:64px;border:3px solid var(--k-ink);border-radius:14px;box-shadow:var(--k-shadow);font-weight:900;font-size:18px;color:#fff;text-shadow:0 1px 0 rgba(0,0,0,.3);display:flex;align-items:center;justify-content:center;gap:8px}
+.ans:active{transform:translate(4px,4px);box-shadow:0 0 0 var(--k-ink)}
+.ans i{width:18px;height:18px;border-radius:50%;background:#fff;border:2px solid var(--k-ink)}
+.count{font-family:var(--k-display);font-size:96px;text-align:center;line-height:1.1}
+</style>
+</head>
+<body class="kit">
+<main class="k-wrap">
+  <section class="k-screen is-active k-stack" id="sTop">
+    <div class="k-panel k-panel--tape k-center">
+      <h1 class="k-h1" style="margin-top:6px">いろことば</h1>
+      <p style="margin:10px 0 4px">文字の<b>意味</b>ではなく、<b>インクの色</b>を答えよう。</p>
+      <div class="card" style="min-height:120px;font-size:64px;box-shadow:none;border-width:3px;margin:12px 0"><span style="color:var(--k-blue)">あか</span></div>
+      <p class="k-hint">この場合の正解は「あお」。30秒で20点以上ならクリア。</p>
+    </div>
+    <button class="k-btn k-btn--primary k-btn--big k-btn--block" id="btnStart" data-se="start">スタート</button>
+    <p class="k-center k-dim" id="best"></p>
+  </section>
+
+  <section class="k-screen k-stack" id="sCount"><div class="count" id="countNum">3</div></section>
+
+  <section class="k-screen k-stack" id="sPlay">
+    <div class="hud">
+      <div class="k-panel"><span>のこり</span><b id="hTime">30</b></div>
+      <div class="k-panel"><span>スコア</span><b id="hScore">0</b></div>
+      <div class="k-panel"><span>コンボ</span><b id="hCombo">0</b></div>
+    </div>
+    <div class="timebar" id="bar"><i id="barFill"></i></div>
+    <div class="card" id="card"><span id="word"></span><span class="combo" id="comboTxt"></span></div>
+    <div class="answers" id="answers"></div>
+  </section>
+
+  <section class="k-screen k-stack" id="sResult">
+    <div class="k-panel k-center">
+      <span class="k-tag">けっか</span>
+      <div class="k-big" id="rScore" style="margin-top:8px">0点</div>
+      <p id="rDetail" class="k-dim"></p>
+    </div>
+    <button class="k-btn k-btn--primary k-btn--big k-btn--block" id="btnRetry" data-se="start">もう一度</button>
+  </section>
+</main>
+
+<script src="../../kit/kit.js"></script>
+<script>
+(() => {
+'use strict';
+const ID = 'irokotoba', LIMIT = 30, CLEAR = 20;
+const COLORS = [
+  {k:'aka', name:'あか', css:'#e8433a'},
+  {k:'ao', name:'あお', css:'#3a6fe0'},
+  {k:'midori', name:'みどり', css:'#2fae62'},
+  {k:'kiiro', name:'きいろ', css:'#e0a800'},
+];
+const $ = id => document.getElementById(id);
+const S = { phase:'top', left:LIMIT, score:0, combo:0, maxCombo:0, miss:0, q:null, last:0, timer:0 };
+
+Kit.mount({ id: ID, title: 'いろことば', onSave: () => {
+  if(S.phase !== 'play' && S.phase !== 'count' && !resume) return null;
+  if(S.phase === 'play') syncLeft();
+  return { left:S.left, score:S.score, combo:S.combo, maxCombo:S.maxCombo, miss:S.miss };
+}});
+
+function shuffle(a){ for(let i=a.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [a[i],a[j]]=[a[j],a[i]]; } return a; }
+function nextQ(){
+  let w, c;
+  do{ w = COLORS[Math.floor(Math.random()*4)]; c = COLORS[Math.floor(Math.random()*4)]; }
+  while(Math.random() < .75 && w.k === c.k);
+  S.q = {w, c};
+  $('word').textContent = w.name; $('word').style.color = c.css;
+  const card = $('card'); card.classList.remove('pop'); void card.offsetWidth; card.classList.add('pop');
+  $('answers').innerHTML = shuffle(COLORS.slice()).map(o => `<button class="ans" data-k="${o.k}" data-se="none" style="background:${o.css}"><i></i>${o.name}</button>`).join('');
+}
+function hud(){
+  $('hTime').textContent = Math.ceil(S.left);
+  $('hScore').textContent = S.score; $('hCombo').textContent = S.combo;
+  $('barFill').style.transform = `scaleX(${Math.max(0,S.left/LIMIT)})`;
+  $('bar').classList.toggle('low', S.left <= 5);
+  $('comboTxt').textContent = S.combo >= 3 ? `${S.combo}コンボ!` : '';
+}
+let endAt = 0, lastSec = 0;
+function syncLeft(){ S.left = Math.max(0, (endAt - performance.now())/1000); }
+function run(){
+  S.phase = 'play'; Kit.screen('sPlay');
+  endAt = performance.now() + S.left*1000; lastSec = Math.ceil(S.left);
+  nextQ(); hud();
+  clearInterval(S.timer);
+  S.timer = setInterval(() => {
+    syncLeft(); hud();
+    const s = Math.ceil(S.left);
+    if(s !== lastSec){ lastSec = s; if(s <= 5 && s > 0) Kit.SE.play('count'); }
+    if(S.left <= 0) end();
+  }, 100);
+}
+function countdown(then){
+  S.phase = 'count'; Kit.screen('sCount');
+  let n = 3; $('countNum').textContent = n; Kit.SE.play('count');
+  const t = setInterval(() => {
+    n--;
+    if(n > 0){ $('countNum').textContent = n; Kit.SE.play('count'); }
+    else { clearInterval(t); Kit.SE.play('go'); then(); }
+  }, 650);
+}
+$('answers').addEventListener('click', e => {
+  const b = e.target.closest('.ans'); if(!b || S.phase !== 'play') return;
+  if(b.dataset.k === S.q.c.k){
+    S.combo++; S.maxCombo = Math.max(S.maxCombo, S.combo);
+    S.score += S.combo >= 5 ? 2 : 1;
+    Kit.SE.play(S.combo >= 5 ? 'select' : 'ok');
+  } else {
+    S.combo = 0; S.miss++; Kit.SE.play('ng'); Kit.shake($('card'));
+    if(navigator.vibrate) navigator.vibrate(60);
+  }
+  nextQ(); hud();
+});
+async function end(){
+  clearInterval(S.timer); S.phase = 'result';
+  Kit.clearSave(ID);
+  const rec = Kit.best(ID, S.score, (a,b)=>a>b);
+  $('rScore').textContent = S.score + '点';
+  $('rDetail').textContent = `最大コンボ ${S.maxCombo} ／ ミス ${S.miss}${rec ? ' ／ 自己ベスト更新！' : ` ／ ベスト ${Kit.best(ID)}点`}`;
+  Kit.screen('sResult');
+  if(S.score >= CLEAR) await Kit.celebrate({ title: rec ? '新記録!' : 'クリア!', sub:`${S.score}点` });
+  else await Kit.fail({ title:'タイムアップ', sub:`あと${CLEAR-S.score}点でクリア` });
+}
+let resume = false;
+function fresh(){
+  if(resume){ resume = false; countdown(run); return; }
+  Object.assign(S, {left:LIMIT, score:0, combo:0, maxCombo:0, miss:0}); countdown(run);
+}
+$('btnStart').addEventListener('click', fresh);
+$('btnRetry').addEventListener('click', fresh);
+
+const b = Kit.best(ID); $('best').textContent = b != null ? `自己ベスト ${b}点` : '';
+const saved = Kit.load(ID);
+if(saved){
+  Object.assign(S, saved); resume = true;
+  $('btnStart').textContent = `つづきから（のこり${Math.ceil(S.left)}秒・${S.score}点）`;
+}
+})();
+</script>
+</body>
+</html>
