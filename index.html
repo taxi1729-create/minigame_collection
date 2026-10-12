@@ -346,6 +346,8 @@ const esc = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>'
 const RM = matchMedia('(prefers-reduced-motion: reduce)');
 
 const ICONS = {
+  uso:'<svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="9" width="36" height="26" rx="6" fill="#fffdf7"/><path d="M14 35l-3 7 9-7"/><path d="M15 22l4 4 7-8"/><path d="M30 18l6 8M36 18l-6 8"/></svg>',
+  news:'<svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M7 10h28v28H11a4 4 0 0 1-4-4z" fill="#fffdf7"/><path d="M35 16h6v18a4 4 0 0 1-4 4h-2"/><path d="M12 16h18M12 22h10M12 28h10"/><circle cx="31" cy="30" r="6" fill="#ff4fa3"/><path d="M31 27v3.5M31 33h.01" stroke="#fffdf7"/></svg>',
   aimai:'<svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M8 12h22a6 6 0 0 1 6 6v6a6 6 0 0 1-6 6H18l-7 6v-6H8z" fill="#fffdf7"/><path d="M17 17.5a4 4 0 1 1 5 3.9c-1 .3-1.5 1-1.5 2v.6"/><circle cx="20.5" cy="27" r=".8" fill="currentColor"/><path d="M34 22h4a4 4 0 0 1 4 4v4a4 4 0 0 1-4 4h-1v4l-5-4" fill="#fffdf7"/></svg>',
   mugon:'<svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><rect x="7" y="9" width="34" height="24" rx="8" fill="#fffdf7"/><path d="M15 33l-3 7 9-7"/><circle cx="17" cy="19" r="2" fill="currentColor"/><circle cx="31" cy="19" r="2" fill="currentColor"/><path d="M18 26h12M21 24l-1.5 4M25 24l-1.5 4M29 24l-1.5 4"/></svg>',
   ishu:'<svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="24" r="5" fill="#fffdf7"/><circle cx="37" cy="24" r="5" fill="#fffdf7"/><path d="M17 20c4-5 10-5 14 0"/><path d="M28 18l3 2-1 3.5"/><path d="M17 30l3 3 3-4 3 4 3-3 2 2"/></svg>',
@@ -383,6 +385,14 @@ const GAMES = [
    score:{dir:1, f:v=>`${v}点`},
    desc:'「とざん」と「ロマン」は母音が同じ。ヒントから同じ母音の言葉を当てよう。',
    how:['お題の読みがなを入れる（おまかせもOK）','ヒントを見て、同じ母音の言葉を答える','ラウンドを重ねて得点を競う']},
+  {id:'uso-zatsugaku', icon:'uso', color:'c-teal', group:'party', name:'嘘雑学クイズ', min:1, max:8, rec:[2,6],
+   score:{dir:1, f:v=>`${v}問正解`},
+   desc:'本物そっくりのウソ雑学が混ざったクイズ。ホントかウソか、全員で見破れ。',
+   how:['何周するか決める（1周＝5問）','雑学を読んで、全員がホントかウソかを答える','ウソが何問あるかは最後まで秘密。正解数で勝負']},
+  {id:'doubt-news', icon:'news', color:'c-pink', group:'party', name:'ダウトニュース', min:1, max:8, rec:[2,6],
+   score:{dir:1, f:v=>`${v}問正解`},
+   desc:'直近24時間の世界と日本のニュース4本のうち、1本だけがニセモノ。どれがウソかを見抜け。',
+   how:['何周するか決める（1周＝3問）','4本のニュースから、ニセニュースだと思うものを選ぶ','見破れたら1ポイント。ニュースはAPIキーで最新のものを取得']},
   {id:'pitatto', icon:'pita', color:'c-pink', group:'solo', name:'ピタッと10秒', min:1, max:1,
    score:{dir:-1, f:v=>`誤差${Number(v).toFixed(2)}秒`},
    desc:'途中から見えなくなるストップウォッチを、ちょうど10.00秒で止める。',
@@ -543,7 +553,7 @@ function ticket(g, n){
   </button>`;
 }
 document.addEventListener('click', e => {
-  const t = e.target.closest('.ticket'); if(t) openSheet(t.dataset.id);
+  const t = e.target.closest('.ticket'); if(t) openSheet(t.dataset.id, !!t.closest('#soloShelf'));
 });
 
 /* =========================================================
@@ -614,8 +624,11 @@ function renderPartyShelves(){
     (ng.length ? `<section class="shelf"><h2>人数が合わない<small>人数を変えると遊べます</small></h2><div class="tickets">${ng.map(g => ticket(g, n)).join('')}</div></section>` : '');
 }
 function renderSolo(){
+  const also = GAMES.filter(g => g.group === 'party' && g.min <= 1);
   $('soloShelf').innerHTML = `<section class="shelf"><h2>ひとりで<small>すきま時間に</small></h2>
-    <div class="tickets">${GAMES.filter(g => g.group === 'solo').map(g => ticket(g, 1)).join('')}</div></section>`;
+    <div class="tickets">${GAMES.filter(g => g.group === 'solo').map(g => ticket(g, 1)).join('')}</div></section>`
+    + (also.length ? `<section class="shelf"><h2>1人でも遊べる<small>みんなで遊ぶゲーム</small></h2>
+    <div class="tickets">${also.map(g => ticket(g, 1)).join('')}</div></section>` : '');
 }
 
 /* =========================================================
@@ -883,12 +896,14 @@ $('fImport').addEventListener('change', async () => {
    詳細シート
    ========================================================= */
 const sheet = $('sheet');
-function openSheet(id){
+function openSheet(id, solo=false){
   const g = GMAP[id];
   const sv = Kit.saveInfo(id);
-  const href = `games/${id}/index.html`;
+  // 「1人で遊ぶ」から開いたみんな向けゲームは、人数設定を変えずに1人で始める
+  const soloRun = solo && g.group === 'party';
+  const href = `games/${id}/index.html` + (soloRun ? '?players=1' : '');
   $('sheetTitle').textContent = g.name;
-  const n = partySize();
+  const n = soloRun ? 1 : partySize();
   let meta = `<span class="k-chip">${playersLabel(g)}</span>`;
   if(g.rec) meta += `<span class="k-chip">おすすめ ${g.rec[0]}〜${g.rec[1]}人</span>`;
   $('sheetMeta').innerHTML = meta;
@@ -896,7 +911,8 @@ function openSheet(id){
   how.style.setProperty('--sc', getComputedStyle(document.querySelector(`.ticket[data-id="${id}"] .ticket__stub`)).backgroundColor);
   how.innerHTML = g.how.map(h => `<li>${esc(h)}</li>`).join('');
   const who = $('sheetWho');
-  if(g.group === 'party'){
+  if(soloRun){ who.hidden = false; who.textContent = `1人で遊ぶ：${Kit.mainName()}`; }
+  else if(g.group === 'party'){
     who.hidden = false;
     who.textContent = n < g.min ? `いまの設定は${n}人。このゲームは${g.min}人からです（ゲーム内でも変えられます）`
       : n > g.max ? `いまの設定は${n}人。このゲームは${g.max}人までです（ゲーム内でも変えられます）`

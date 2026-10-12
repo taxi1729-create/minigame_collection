@@ -56,11 +56,18 @@ function commit(reason){
 function onChange(fn){ listeners.add(fn); return () => listeners.delete(fn); }
 
 /* ---------- 設定（端末ごと。同期しない） ---------- */
+const URL_PLAYERS = (() => { try{ const n = parseInt(new URLSearchParams(location.search).get('players'), 10); return n >= 1 && n <= 8 ? n : 0; }catch(e){ return 0; } })();
 const SETTINGS_DEFAULT = { volume: 0.7, muted: false, partySize: 3, keys: { claude:'', gemini:'' } };
 const settings = {
-  get(){ const s = store.get('settings', {}); return Object.assign({}, SETTINGS_DEFAULT, s, { keys: Object.assign({}, SETTINGS_DEFAULT.keys, s.keys||{}) }); },
+  get(){
+    const s = store.get('settings', {});
+    const out = Object.assign({}, SETTINGS_DEFAULT, s, { keys: Object.assign({}, SETTINGS_DEFAULT.keys, s.keys||{}) });
+    if(URL_PLAYERS) out.partySize = URL_PLAYERS; // ?players=N で開いたページだけ人数を上書き（保存はしない）
+    return out;
+  },
   set(patch){
-    const cur = settings.get();
+    const cur = Object.assign({}, SETTINGS_DEFAULT, store.get('settings', {}));
+    cur.keys = Object.assign({}, SETTINGS_DEFAULT.keys, cur.keys||{});
     const prevKeys = cur.keys;
     const next = Object.assign(cur, patch);
     if(patch.keys) next.keys = Object.assign({}, prevKeys, patch.keys);

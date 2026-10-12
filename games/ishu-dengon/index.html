@@ -20,16 +20,11 @@
     </div>
 
     <div class="settings-panel">
-      <div class="setting-row">
-        <p class="setting-label">プレイ人数</p>
-        <div class="toggle-group" id="playerCount">
-          <button class="toggle-btn" data-value="2">2人</button>
-          <button class="toggle-btn active" data-value="3">3人</button>
-          <button class="toggle-btn" data-value="4">4人</button>
-          <button class="toggle-btn" data-value="5">5人</button>
-          <button class="toggle-btn" data-value="6">6人</button>
-          <button class="toggle-btn" data-value="7">7人</button>
-        </div>
+      <div class="setting-row" id="partyRow">
+        <p class="setting-label">参加メンバー</p>
+        <p class="party-line" id="partyInfo"></p>
+        <p class="k-hint party-warn" id="partyWarn" hidden></p>
+        <p class="setting-hint">人数と名前はタイトルの「みんなで遊ぶ」で変えられます</p>
       </div>
 
       <div class="setting-row">
@@ -59,14 +54,8 @@
       </div>
 
       <div class="setting-row">
-        <p class="setting-label">Claude APIキー
-          <span class="setting-badge">AI変換・答え判定に使用</span>
-        </p>
-        <input type="password" id="claudeKeyInput" class="api-key-input"
-          placeholder="sk-ant-..." autocomplete="off">
-        <p class="api-key-hint">
-          キーはこの端末にだけ保存され、あそびばこ共通の設定と共有されます。未入力でもAI以外のアクションで遊べます。
-        </p>
+        <p class="setting-label">AI機能</p>
+        <p class="ai-status" id="aiStatus"></p>
       </div>
     </div>
 
@@ -125,24 +114,18 @@ document.addEventListener('DOMContentLoaded', () => {
 
   initTitleScreen();
 
-  // 人数の初期値はタイトル画面で決めた人数（2〜7人に収める）。再開時は下でセーブ側が上書き
-  const party = Math.max(2, Math.min(7, Math.round(+Kit.settings.get().partySize) || 3));
-  GameState.playerCount = party;
-  document.querySelectorAll('#playerCount .toggle-btn').forEach(b => b.classList.toggle('active', +b.dataset.value === party));
-
   // APIキーは共通設定（Kit.settings keys.claude）。旧 ishu.claudeKey は共通設定が空のときだけ移行
-  const keyIn = document.getElementById('claudeKeyInput');
   const oldKey = Kit.store.get(KEY_STORE, '');
   if (oldKey && !Kit.settings.get().keys.claude) Kit.settings.set({ keys: { claude: oldKey } });
   if (oldKey) Kit.store.del(KEY_STORE);
-  const sharedKey = Kit.settings.get().keys.claude || '';
-  keyIn.value = sharedKey; GameState.claudeApiKey = sharedKey;
-  keyIn.addEventListener('change', () => {
-    const k = keyIn.value.trim(); GameState.claudeApiKey = k;
-    if (k !== Kit.settings.get().keys.claude) Kit.settings.set({ keys: { claude: k } });
-  });
 
-  document.getElementById('replayBtn').addEventListener('click', () => { Kit.clearSave(ID); showScreen('titleScreen'); });
+  // 人数・APIキーは共通設定から（再開時は下でセーブ側の人数が上書き）
+  applySharedSettings();
+  renderSharedSettings();
+  Kit.onChange(r => { if ((r === 'settings' || r === 'profile') && currentScreenId === 'titleScreen') { applySharedSettings(); renderSharedSettings(); } });
+  window.addEventListener('pageshow', () => { if (currentScreenId === 'titleScreen') { applySharedSettings(); renderSharedSettings(); } });
+
+  document.getElementById('replayBtn').addEventListener('click', () => { Kit.clearSave(ID); applySharedSettings(); renderSharedSettings(); showScreen('titleScreen'); });
   document.getElementById('continueBtn').addEventListener('click', () => { SoundManager.init(); startGame(); });
 
   // ---------- セーブ ----------
@@ -167,7 +150,7 @@ document.addEventListener('DOMContentLoaded', () => {
   if (saved && saved.gs) {
     Object.assign(GameState, saved.gs);
     // 設定トグルの表示を合わせる
-    [['playerCount', GameState.playerCount], ['difficulty', GameState.difficulty], ['gameModeToggle', GameState.gameMode]].forEach(([id, v]) => {
+    [['difficulty', GameState.difficulty], ['gameModeToggle', GameState.gameMode]].forEach(([id, v]) => {
       document.querySelectorAll(`#${id} .toggle-btn`).forEach(b => b.classList.toggle('active', String(b.dataset.value) === String(v)));
     });
     if (saved.screen === 'resultScreen') {

@@ -1,0 +1,493 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>嘘雑学クイズ | あそびばこ</title>
+<link rel="stylesheet" href="../../kit/kit.css">
+<style>
+.tagline{margin:8px 0 0;font-weight:900}
+.mem{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+.mem .k-chip{font-size:14px;padding:3px 12px}
+.rule{margin:8px 0 0;padding-left:20px;font-size:14px}
+.rule li{margin:2px 0}
+.ai-box{display:flex;align-items:center;gap:10px;margin-top:8px}
+.ai-box label{flex:1;font-weight:900;font-size:15px}
+.ai-box input{width:24px;height:24px;accent-color:var(--k-pink)}
+
+/* 進行 */
+.prog{margin-bottom:6px;display:flex;align-items:center;justify-content:space-between;gap:8px;font-weight:900}
+.dots{display:flex;gap:5px;flex-wrap:wrap;justify-content:flex-end}
+.dots i{width:12px;height:12px;border-radius:50%;border:2px solid var(--k-ink);background:var(--k-label)}
+.dots i.done{background:var(--k-ink2)}
+.dots i.now{background:var(--k-yellow);transform:scale(1.25)}
+
+/* 問題カード */
+.qcard{padding:26px 16px 22px}
+.qcard .k-tag{background:var(--k-yellow);color:#1d2440;border:2px solid var(--k-ink)}
+.qno{font-family:var(--k-display);font-size:15px;color:var(--k-ink2);margin:0 0 4px}
+.qtext{font-family:var(--k-body);font-weight:900;font-size:clamp(21px,6.2vw,28px);line-height:1.55;margin:0;overflow-wrap:anywhere}
+.qask{margin:12px 0 0;font-weight:900;color:var(--k-ink2);font-size:14px;text-align:center}
+
+/* 1人用の大ボタン */
+.solo{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.bigans{min-height:96px;border:3px solid var(--k-ink);border-radius:18px;box-shadow:var(--k-shadow);
+  font-family:var(--k-display);font-size:clamp(26px,8vw,34px);color:#fff;letter-spacing:.06em;transition:transform .08s,box-shadow .08s}
+.bigans:active{transform:translate(4px,4px);box-shadow:0 0 0 var(--k-ink)}
+.bigans.t{background:var(--k-teal)} .bigans.l{background:var(--k-pink)}
+
+/* 複数人の回答行 */
+.ans{display:grid;gap:8px;margin-top:8px}
+.arow{display:grid;grid-template-columns:1fr auto auto;gap:8px;align-items:center;border:3px solid var(--k-ink);border-radius:12px;background:var(--k-label);padding:6px 6px 6px 12px}
+.arow .nm{font-weight:900;font-size:16px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pick{min-width:74px;min-height:44px;border:3px solid var(--k-ink);border-radius:10px;background:var(--k-label2);font-weight:900;font-size:15px;box-shadow:2px 2px 0 var(--k-ink);padding:0 8px}
+.pick:active{transform:translate(2px,2px);box-shadow:0 0 0 var(--k-ink)}
+.pick.t[aria-pressed="true"]{background:var(--k-teal);color:#fff}
+.pick.l[aria-pressed="true"]{background:var(--k-pink);color:#fff}
+.arow.done{background:color-mix(in srgb,var(--k-yellow) 30%,var(--k-label))}
+.left{text-align:center;font-weight:900;font-size:14px;color:var(--k-ink2);margin:0}
+
+/* 正解発表 */
+.verdict{display:flex;justify-content:center;padding:6px 0 10px}
+.vstamp{font-family:var(--k-display);font-size:clamp(52px,17vw,84px);line-height:1;letter-spacing:.05em;
+  border:6px solid currentColor;border-radius:18px;padding:8px 22px 12px;background:var(--k-label);
+  transform:rotate(-6deg);animation:uso-stamp .5s cubic-bezier(.2,1.6,.4,1) both}
+.vstamp.t{color:var(--k-teal);box-shadow:6px 6px 0 color-mix(in srgb,var(--k-teal) 35%,transparent)}
+.vstamp.l{color:var(--k-pink);box-shadow:6px 6px 0 color-mix(in srgb,var(--k-pink) 35%,transparent)}
+@keyframes uso-stamp{0%{transform:scale(2.4) rotate(-16deg);opacity:0}60%{opacity:1}100%{transform:scale(1) rotate(-6deg);opacity:1}}
+.shown{font-weight:900;font-size:17px;line-height:1.6;margin:0;overflow-wrap:anywhere}
+.real{margin-top:12px;padding:12px;border:3px dashed var(--k-teal);border-radius:12px;background:color-mix(in srgb,var(--k-teal) 8%,var(--k-label))}
+.real b.lbl{display:inline-block;background:var(--k-teal);color:#fff;border-radius:999px;padding:0 10px;font-size:13px;margin-bottom:4px}
+.real p{margin:0;font-weight:900;font-size:clamp(18px,5.4vw,23px);line-height:1.55;overflow-wrap:anywhere}
+mark.mt{background:color-mix(in srgb,var(--k-teal) 30%,transparent);color:inherit;border-bottom:3px solid var(--k-teal);padding:0 2px;border-radius:3px}
+mark.ml{background:color-mix(in srgb,var(--k-pink) 22%,transparent);color:inherit;text-decoration:line-through 3px var(--k-pink);padding:0 2px;border-radius:3px}
+.note{margin:12px 0 0;font-size:15px;font-weight:700;padding-left:12px;border-left:4px solid var(--k-yellow)}
+.src{display:inline-block;margin-top:8px}
+
+/* 得点ボード */
+.board{display:grid;gap:8px;margin-top:8px}
+.brow{display:grid;grid-template-columns:30px 1fr auto auto;gap:8px;align-items:center;border:3px solid var(--k-ink);border-radius:12px;background:var(--k-label);padding:7px 12px}
+.brow .rk{font-family:var(--k-display);font-size:19px;text-align:center}
+.brow .nm{font-weight:900;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.brow .pt{font-family:var(--k-display);font-size:22px;min-width:2.2em;text-align:right}
+.brow .pt small{font-family:var(--k-body);font-size:12px;font-weight:900;margin-left:2px}
+.brow.ok{background:color-mix(in srgb,var(--k-teal) 14%,var(--k-label))}
+.brow.top{background:color-mix(in srgb,var(--k-yellow) 45%,var(--k-label))}
+.mk{font-family:var(--k-display);font-size:22px;width:1.2em;text-align:center}
+.mk.o{color:var(--k-teal)} .mk.x{color:var(--k-pink)}
+.mini{font-size:12px;font-weight:900;padding:0 8px}
+
+/* 結果 */
+.winner{font-family:var(--k-display);font-size:clamp(30px,10vw,48px);line-height:1.2;overflow-wrap:anywhere}
+.lies{font-weight:900;font-size:15px;margin:8px 0 0}
+.lies em{font-style:normal;font-family:var(--k-display);font-size:clamp(26px,8vw,34px);color:var(--k-pink);white-space:nowrap;margin:0 2px}
+.winner span{white-space:nowrap}
+.fbtns .k-btn{padding-left:8px;padding-right:8px}
+.review{display:grid;gap:8px;margin-top:8px}
+.rv{display:grid;grid-template-columns:auto 1fr;gap:10px;align-items:start;font-size:14px;font-weight:700;line-height:1.5;padding:8px 0;border-bottom:2px dashed color-mix(in srgb,var(--k-ink) 25%,transparent)}
+.rv:last-child{border-bottom:0}
+.rv .k-chip{white-space:nowrap}
+</style>
+</head>
+<body class="kit">
+<main class="k-wrap">
+
+  <!-- 開始 -->
+  <section class="k-screen is-active k-stack" id="sStart">
+    <div class="k-panel k-panel--tape k-center">
+      <h1 class="k-h1" style="margin-top:6px">嘘雑学クイズ</h1>
+      <p class="tagline">その雑学、ホント？ウソ？<br>ウソは本物を1か所だけ変えてあります。</p>
+    </div>
+    <div class="k-panel">
+      <span class="k-tag">あそぶ人</span>
+      <div class="mem" id="mem"></div>
+      <p class="k-hint" style="margin-top:10px">人数と名前はタイトルの「みんなで遊ぶ」で変えられます。</p>
+    </div>
+    <div class="k-panel">
+      <span class="k-tag">何周する？</span>
+      <div class="k-seg" id="laps" style="margin-top:8px"></div>
+      <p class="k-hint" id="lapsHint"></p>
+    </div>
+    <div class="k-panel">
+      <span class="k-tag">ルール</span>
+      <ul class="rule">
+        <li>雑学を1つずつ出題。全員が<b>ホント</b>か<b>ウソ</b>かを答えます。</li>
+        <li><b>1周＝5問</b>。正解するたびに <b>+1点</b>。</li>
+        <li>ホントとウソは毎問ランダム。<b>何問がウソかは最後まで秘密</b>。</li>
+        <li>ウソは本物の数字・名前・向きなどを<b>1か所だけ</b>変えてあります。</li>
+      </ul>
+    </div>
+    <div class="k-panel" id="aiPanel">
+      <span class="k-tag">AIの問題</span>
+      <div class="ai-box" id="aiOn" hidden>
+        <label for="aiChk">AIで新しい問題を5問混ぜる</label>
+        <input type="checkbox" id="aiChk">
+      </div>
+      <p class="k-hint" id="aiOff" hidden>タイトルの設定変更でClaude APIキーを入れると使えます。</p>
+    </div>
+    <button class="k-btn k-btn--primary k-btn--big k-btn--block" id="btnStart" data-se="start">ゲームスタート</button>
+  </section>
+
+  <!-- 出題 -->
+  <section class="k-screen k-stack" id="sQ">
+    <div class="prog"><span id="qProg"></span><span class="dots" id="qDots"></span></div>
+    <div class="k-panel qcard">
+      <span class="k-tag" id="qCat"></span>
+      <p class="qno" id="qNo"></p>
+      <p class="qtext" id="qText"></p>
+      <p class="qask">この雑学、ホント？ウソ？</p>
+    </div>
+    <div class="solo" id="solo">
+      <button class="bigans t" type="button" data-v="t" data-se="select">ホント</button>
+      <button class="bigans l" type="button" data-v="l" data-se="select">ウソ</button>
+    </div>
+    <div id="multi">
+      <div class="k-panel">
+        <span class="k-tag">みんなの答え</span>
+        <div class="ans" id="ans"></div>
+      </div>
+      <p class="left" id="left" style="margin-top:12px"></p>
+      <button class="k-btn k-btn--primary k-btn--big k-btn--block" id="btnReveal" data-se="none" style="margin-top:10px">正解発表</button>
+    </div>
+  </section>
+
+  <!-- 正解発表 -->
+  <section class="k-screen k-stack" id="sReveal">
+    <div class="verdict"><div class="vstamp" id="rStamp"></div></div>
+    <div class="k-panel">
+      <span class="k-tag" id="rTag">出題</span>
+      <p class="shown" id="rShown" style="margin-top:6px"></p>
+      <div class="real" id="rReal" hidden><b class="lbl">本当は</b><p id="rTruth"></p></div>
+      <p class="note" id="rNote"></p>
+      <span class="k-chip k-chip--yellow src" id="rAi" hidden>AIが作った問題</span>
+    </div>
+    <div class="k-panel">
+      <span class="k-tag">この問題の結果</span>
+      <div class="board" id="rBoard"></div>
+    </div>
+    <button class="k-btn k-btn--primary k-btn--big k-btn--block" id="btnNext"></button>
+  </section>
+
+  <!-- 結果 -->
+  <section class="k-screen k-stack" id="sFinal">
+    <div class="k-panel k-panel--tape k-center">
+      <p class="k-dim" id="fLead" style="margin:8px 0 0"></p>
+      <div class="winner" id="fWin"></div>
+      <p class="lies" id="fLies"></p>
+    </div>
+    <div class="k-panel">
+      <span class="k-tag" id="fBoardTag">最終順位</span>
+      <div class="board" id="fBoard"></div>
+    </div>
+    <div class="k-panel">
+      <span class="k-tag">出題ふりかえり</span>
+      <div class="review" id="fReview"></div>
+    </div>
+    <div class="k-grid2 fbtns">
+      <button class="k-btn" id="btnAgain" data-se="start">同じ設定で</button>
+      <button class="k-btn k-btn--primary" id="btnBack">設定にもどる</button>
+    </div>
+  </section>
+</main>
+
+<script src="../../kit/kit.js"></script>
+<script src="questions.js"></script>
+<script>
+(() => {
+'use strict';
+const ID = 'uso-zatsugaku';
+const PER_LAP = 5;
+const PLAYED_KEY = ID + '.played';
+const $ = id => document.getElementById(id);
+const esc = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, Math.round(+v) || lo));
+const shuffle = a => { for(let i=a.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [a[i],a[j]]=[a[j],a[i]]; } return a; };
+const BANK = (window.USO_QUESTIONS || []).filter(valid);
+
+function valid(q){
+  return q && q.truth && q.lie && q.truth !== q.lie && Array.isArray(q.diff) && q.diff.length === 2
+    && q.diff[0] && q.diff[1] && q.truth.includes(q.diff[0]) && q.lie.includes(q.diff[1]);
+}
+const partyPlayers = () => Kit.players(clamp(Kit.settings.get().partySize, 1, 8));
+const hasKey = () => !!(Kit.settings.get().keys.claude || '').trim();
+
+/* S.qs: [{ id, cat, truth, lie, diff, note, isLie, ai? }]
+   S.ans: いまの問題の回答（セーブしない）, S.last: 正解発表中の回答 */
+const fresh = () => ({ phase:'start', players: partyPlayers(), laps: Kit.store.get(ID + '.laps', 2), qs:[], idx:0, scores:[], last:null, recorded:false });
+let S = fresh();
+S.laps = clamp(S.laps, 1, 5);
+let ans = [];
+const saved = Kit.load(ID);
+if(saved && saved.phase && saved.qs && saved.qs.length) S = Object.assign(fresh(), saved);
+
+Kit.mount({ id: ID, title: '嘘雑学クイズ', onSave: () => {
+  if(S.phase === 'start' || S.phase === 'final') return null;
+  return JSON.parse(JSON.stringify(S)); // 回答途中（ans）は保存しない
+}});
+
+/* ---------- 開始画面 ---------- */
+function drawStart(){
+  const ps = partyPlayers();
+  $('mem').innerHTML = ps.map((p,i) => `<span class="k-chip ${i===0?'k-chip--yellow':''}">${esc(p)}</span>`).join('')
+    + `<span class="k-chip k-chip--teal">${ps.length}人</span>`;
+  $('laps').innerHTML = [1,2,3,4,5].map(n => `<button type="button" data-v="${n}" data-se="select" aria-pressed="${n===S.laps}">${n}周</button>`).join('');
+  $('lapsHint').textContent = `${S.laps}周 ＝ 全${S.laps*PER_LAP}問`;
+  const k = hasKey();
+  $('aiOn').hidden = !k; $('aiOff').hidden = k;
+  $('aiChk').checked = k && !!Kit.store.get(ID + '.ai', false);
+}
+$('laps').addEventListener('click', e => {
+  const b = e.target.closest('button'); if(!b) return;
+  S.laps = +b.dataset.v; Kit.store.set(ID + '.laps', S.laps); drawStart();
+});
+$('aiChk').addEventListener('change', () => Kit.store.set(ID + '.ai', $('aiChk').checked));
+
+function pickQuestions(n){
+  let played = Kit.store.get(PLAYED_KEY, []);
+  if(!Array.isArray(played)) played = [];
+  const seen = new Set(played);
+  let out = shuffle(BANK.filter(q => !seen.has(q.id))).slice(0, n);
+  if(out.length < n){
+    // 未出題を使い切ったらリセット（今回の分は除いて補充）
+    Kit.store.set(PLAYED_KEY, []);
+    const have = new Set(out.map(q => q.id));
+    out = out.concat(shuffle(BANK.filter(q => !have.has(q.id))).slice(0, n - out.length));
+  }
+  return out.map(q => Object.assign({}, q, { isLie: Math.random() < .5 }));
+}
+function markPlayed(id){
+  if(!id || String(id).startsWith('ai')) return;
+  const p = Kit.store.get(PLAYED_KEY, []);
+  const list = Array.isArray(p) ? p : [];
+  if(!list.includes(id)){ list.push(id); Kit.store.set(PLAYED_KEY, list); }
+}
+
+$('btnStart').addEventListener('click', async () => {
+  const total = S.laps * PER_LAP;
+  S.players = partyPlayers();
+  let qs = pickQuestions(total);
+  if(hasKey() && $('aiChk').checked){
+    const btn = $('btnStart'); btn.disabled = true; btn.textContent = 'AIが問題を作っています…';
+    try{
+      const ai = await generateAI(Math.min(5, total));
+      if(ai.length){
+        const slots = shuffle(qs.map((_,i)=>i)).slice(0, ai.length);
+        slots.forEach((s,k) => qs[s] = Object.assign({}, ai[k], { isLie: Math.random() < .5 }));
+        Kit.toast(`AIの問題を${ai.length}問まぜました`);
+      }else Kit.toast('AIの問題を作れませんでした。内蔵の問題で遊びます', 2400);
+    }catch(err){
+      Kit.toast((err && err.message ? err.message : 'AIに接続できませんでした') + '。内蔵の問題で遊びます', 2600);
+    }finally{ btn.disabled = false; btn.textContent = 'ゲームスタート'; }
+  }
+  S.qs = qs; S.idx = 0; S.scores = S.players.map(()=>0); S.last = null; S.recorded = false;
+  toQuestion();
+});
+
+/* ---------- AIの問題 ---------- */
+async function generateAI(n){
+  const key = (Kit.settings.get().keys.claude || '').trim();
+  const avoid = shuffle(BANK.slice()).slice(0, 25).map(q => q.truth).join('\n');
+  const system = 'あなたは日本語の雑学クイズ作家です。指定のJSONだけを出力し、前置き・説明・コードブロックは書きません。';
+  const prompt = `「ホントかウソか」を当てる雑学クイズを${n}問作ってください。
+
+条件:
+- truth: 確実に事実で、百科事典や公的機関で確認できる雑学（1文、50字以内）。俗説・諸説あるもの・時期で変わる記録は避ける。
+- lie: truth の数字・固有名詞・場所・年代・比較の向きなどを「1か所だけ」変えた文。それ以外は truth と同じ文字列にする。変えた結果が別の事実として成り立たないこと。
+- diff: ["truthで変えた部分の文字列", "lieでそこに入れた文字列"]（それぞれ truth と lie にそのまま含まれること）
+- note: 40字程度の短い解説（本当の話）。
+- cat: 動物・人体・食べ物・歴史・地理・宇宙・科学・言葉・スポーツ・日本の文化 のどれか。なるべくばらけさせる。
+- 次の雑学とは別の話題にする:
+${avoid}
+
+出力形式（このJSONのみ）:
+{"questions":[{"cat":"...","truth":"...","lie":"...","diff":["...","..."],"note":"..."}]}`;
+  const ctl = new AbortController(); const tm = setTimeout(() => ctl.abort(), 45000);
+  try{
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method:'POST', signal: ctl.signal,
+      headers:{ 'content-type':'application/json', 'x-api-key': key, 'anthropic-version':'2023-06-01', 'anthropic-dangerous-direct-browser-access':'true' },
+      body: JSON.stringify({ model:'claude-sonnet-5-5', max_tokens: 2048, system, messages:[{ role:'user', content: prompt }] }),
+    });
+    const data = await res.json().catch(() => null);
+    if(!res.ok) throw new Error(res.status === 401 ? 'APIキーが正しくありません' : 'AIの呼び出しに失敗しました');
+    const text = ((data && data.content) || []).filter(c => c.type === 'text').map(c => c.text).join('');
+    const json = JSON.parse(text.slice(text.indexOf('{'), text.lastIndexOf('}') + 1));
+    const stamp = Date.now().toString(36);
+    return (Array.isArray(json.questions) ? json.questions : []).map((q,i) => ({
+      id: `ai-${stamp}-${i}`, ai: true,
+      cat: String(q.cat || 'AI').slice(0, 8), truth: String(q.truth || '').trim(), lie: String(q.lie || '').trim(),
+      diff: Array.isArray(q.diff) ? q.diff.map(s => String(s)) : [], note: String(q.note || '').trim().slice(0, 80),
+    })).filter(valid).slice(0, n);
+  }catch(err){
+    if(err instanceof SyntaxError) throw new Error('AIの答えを読み取れませんでした');
+    if(err && err.name === 'AbortError') throw new Error('AIの応答が時間切れでした');
+    if(err instanceof TypeError) throw new Error('AIに接続できませんでした');
+    throw err;
+  }finally{ clearTimeout(tm); }
+}
+
+/* ---------- 出題 ---------- */
+const cur = () => S.qs[S.idx];
+const shownText = q => q.isLie ? q.lie : q.truth;
+function progText(){
+  const lap = Math.floor(S.idx / PER_LAP) + 1, k = S.idx % PER_LAP + 1;
+  return `${lap}周目　${k} / ${PER_LAP}問`;
+}
+function drawDots(el){
+  el.innerHTML = S.qs.map((_,i) => `<i class="${i<S.idx?'done':i===S.idx?'now':''}"></i>`).join('');
+  el.setAttribute('aria-label', `全${S.qs.length}問中 ${S.idx+1}問目`);
+}
+function toQuestion(){
+  S.phase = 'q'; S.last = null;
+  const q = cur();
+  ans = S.players.map(() => null);
+  $('qProg').textContent = progText();
+  drawDots($('qDots'));
+  $('qCat').textContent = q.cat;
+  $('qNo').textContent = `Q${S.idx+1}`;
+  $('qText').textContent = shownText(q);
+  const solo = S.players.length === 1;
+  $('solo').hidden = !solo; $('multi').hidden = solo;
+  if(!solo) drawAns();
+  Kit.screen('sQ');
+  Kit.SE.play('pop');
+}
+function drawAns(){
+  $('ans').innerHTML = S.players.map((p,i) => `
+    <div class="arow ${ans[i]?'done':''}"><span class="nm">${esc(p)}</span>
+      <button type="button" class="pick t" data-i="${i}" data-v="t" data-se="select" aria-pressed="${ans[i]==='t'}" aria-label="${esc(p)}：ホント">ホント</button>
+      <button type="button" class="pick l" data-i="${i}" data-v="l" data-se="select" aria-pressed="${ans[i]==='l'}" aria-label="${esc(p)}：ウソ">ウソ</button></div>`).join('');
+  const rest = ans.filter(a => !a).length;
+  $('left').textContent = rest ? `あと ${rest}人` : '全員そろいました！';
+  $('btnReveal').disabled = rest > 0;
+}
+$('ans').addEventListener('click', e => {
+  const b = e.target.closest('.pick'); if(!b) return;
+  const i = +b.dataset.i;
+  ans[i] = ans[i] === b.dataset.v ? null : b.dataset.v;
+  drawAns();
+});
+$('solo').addEventListener('click', e => {
+  const b = e.target.closest('.bigans'); if(!b || S.phase !== 'q') return;
+  ans = [b.dataset.v]; judge();
+});
+$('btnReveal').addEventListener('click', () => { if(ans.every(Boolean)) judge(); });
+
+function judge(){
+  const q = cur(), right = q.isLie ? 'l' : 't';
+  const ok = ans.map(a => a === right);
+  ok.forEach((o,i) => { if(o) S.scores[i]++; });
+  S.last = { ans: ans.slice(), ok };
+  markPlayed(q.id);
+  toReveal(true);
+}
+
+/* ---------- 正解発表 ---------- */
+function hl(text, word, cls){
+  const at = text.indexOf(word);
+  if(!word || at < 0) return esc(text);
+  return esc(text.slice(0, at)) + `<mark class="${cls}">${esc(word)}</mark>` + esc(text.slice(at + word.length));
+}
+function toReveal(fresh){
+  S.phase = 'reveal';
+  const q = cur(), L = S.last;
+  const st = $('rStamp');
+  st.className = 'vstamp ' + (q.isLie ? 'l' : 't');
+  st.textContent = q.isLie ? 'ウソ！' : 'ホント！';
+  st.style.animation = 'none'; void st.offsetWidth; st.style.animation = '';
+  $('rTag').textContent = `Q${S.idx+1}　${q.cat}`;
+  if(q.isLie){
+    $('rShown').innerHTML = hl(q.lie, q.diff[1], 'ml');
+    $('rTruth').innerHTML = hl(q.truth, q.diff[0], 'mt');
+    $('rReal').hidden = false;
+  }else{
+    $('rShown').innerHTML = hl(q.truth, q.diff[0], 'mt');
+    $('rReal').hidden = true;
+  }
+  $('rNote').textContent = q.note || '';
+  $('rNote').hidden = !q.note;
+  $('rAi').hidden = !q.ai;
+  const solo = S.players.length === 1;
+  $('rBoard').innerHTML = S.players.map((p,i) => {
+    const a = L.ans[i] === 't' ? 'ホント' : 'ウソ';
+    return `<div class="brow ${L.ok[i]?'ok':''}"><span class="mk ${L.ok[i]?'o':'x'}">${L.ok[i]?'○':'×'}</span>
+      <span class="nm">${esc(p)} <span class="k-chip mini ${L.ans[i]==='t'?'k-chip--teal':'k-chip--pink'}">${a}</span></span>
+      <span></span><span class="pt">${S.scores[i]}<small>${solo?`/${S.idx+1}`:'点'}</small></span></div>`;
+  }).join('');
+  $('btnNext').textContent = S.idx + 1 >= S.qs.length ? '結果発表へ' : '次の問題へ';
+  Kit.screen('sReveal');
+  if(fresh){
+    Kit.SE.play('stamp');
+    setTimeout(() => Kit.SE.play(L.ok.some(Boolean) ? 'ok' : 'ng'), 260);
+    if(!L.ok.some(Boolean)) setTimeout(() => Kit.shake($('rBoard')), 300);
+  }
+}
+$('btnNext').addEventListener('click', () => {
+  if(S.phase !== 'reveal') return;
+  S.idx++;
+  if(S.idx >= S.qs.length) return toFinal();
+  toQuestion();
+});
+
+/* ---------- 結果 ---------- */
+function ranking(){
+  const order = S.players.map((_,i) => i).sort((a,b) => S.scores[b] - S.scores[a]);
+  let rank = 0, prev = null;
+  return order.map((i,k) => { if(S.scores[i] !== prev){ rank = k + 1; prev = S.scores[i]; } return { i, rank }; });
+}
+async function toFinal(){
+  S.phase = 'final';
+  Kit.clearSave(ID);
+  const n = S.qs.length, solo = S.players.length === 1;
+  const lies = S.qs.filter(q => q.isLie).length;
+  const top = Math.max(...S.scores);
+  const wins = S.players.filter((_,i) => S.scores[i] === top);
+  const allTie = !solo && wins.length === S.players.length;
+  if(solo){
+    $('fLead').textContent = `${S.players[0]} さんの正解数`;
+    $('fWin').textContent = `${n}問中 ${S.scores[0]}問`;
+    $('fBoardTag').textContent = '成績';
+  }else{
+    $('fLead').textContent = allTie ? '全員同点！' : 'いちばん見抜いたのは';
+    $('fWin').innerHTML = allTie ? `${top}点で引き分け` : wins.map(w => `<span>${esc(w)}</span>`).join('・');
+    $('fBoardTag').textContent = '最終順位';
+  }
+  $('fLies').innerHTML = `全${n}問のうち、ウソは<em>${lies}</em>問でした`;
+  $('fBoard').innerHTML = ranking().map(({i, rank}) => `
+    <div class="brow ${S.scores[i]===top&&!solo?'top':''}"><span class="rk">${solo?'':rank}</span><span class="nm">${esc(S.players[i])}</span>
+      <span class="k-dim">${n}問中${S.scores[i]}問</span><span class="pt">${S.scores[i]}<small>点</small></span></div>`).join('');
+  $('fReview').innerHTML = S.qs.map((q,i) => `
+    <div class="rv"><span class="k-chip ${q.isLie?'k-chip--pink':'k-chip--teal'}">${q.isLie?'ウソ':'ホント'}</span>
+      <span>${q.isLie ? hl(q.lie, q.diff[1], 'ml') + '<br><span class="k-dim">→ ' + hl(q.truth, q.diff[0], 'mt') + '</span>' : esc(q.truth)}</span></div>`).join('');
+  Kit.screen('sFinal');
+
+  if(!S.recorded){
+    S.recorded = true;
+    const group = Kit.newGroup();
+    S.players.forEach((p,i) => {
+      let result;
+      if(solo) result = S.scores[i] / n >= .6 ? 'clear' : 'fail';
+      else result = allTie ? 'play' : S.scores[i] === top ? 'win' : 'lose';
+      Kit.record({ game: ID, player: p, result, score: S.scores[i], detail: `${n}問中${S.scores[i]}問`, group });
+    });
+  }
+  if(solo){
+    const rate = S.scores[0] / n;
+    if(rate >= .6) await Kit.celebrate({ title: rate === 1 ? '全問正解!' : 'クリア!', sub: `${n}問中${S.scores[0]}問 正解`, ms: 2600 });
+    else await Kit.fail({ title: 'ざんねん', sub: `${n}問中${S.scores[0]}問（6割でクリア）` });
+  }else{
+    await Kit.celebrate({ title: allTie ? '引き分け!' : '優勝!', sub: allTie ? `全員${top}点` : `${wins.join('・')}（${top}点）`, ms: 2800 });
+  }
+}
+$('btnAgain').addEventListener('click', () => { S.phase = 'start'; drawStart(); $('btnStart').click(); });
+$('btnBack').addEventListener('click', () => { S = Object.assign(fresh(), { laps: S.laps }); drawStart(); Kit.screen('sStart'); });
+
+/* ---------- 起動・再開 ---------- */
+drawStart();
+if(S.phase === 'q'){ toQuestion(); Kit.toast('つづきから再開します'); }
+else if(S.phase === 'reveal' && S.last){ toReveal(false); Kit.toast('つづきから再開します'); }
+else if(S.phase !== 'start'){ S = fresh(); S.laps = clamp(S.laps, 1, 5); drawStart(); }
+})();
+</script>
+</body>
+</html>

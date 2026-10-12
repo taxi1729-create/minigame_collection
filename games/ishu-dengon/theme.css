@@ -72,3 +72,11 @@ body.kit{max-width:none;margin:0;user-select:auto}
 .result-title.wrong{color:var(--k-pink);text-shadow:3px 3px 0 var(--k-ink)}
 .loading-spinner{border-color:color-mix(in srgb,var(--k-ink) 20%,transparent);border-top-color:var(--k-pink)}
 .confetti-container{display:none}
+
+/* 共通設定から読む人数・AIの表示 */
+.party-line{font-weight:900;font-size:1rem;line-height:1.6;color:var(--k-ink);word-break:keep-all;overflow-wrap:anywhere}
+.party-lead{color:var(--k-ink2);font-size:.85rem}
+.party-warn{margin:0;padding:6px 10px;border:2px dashed var(--k-pink);border-radius:10px;color:var(--k-ink);font-weight:700}
+.ai-status{margin:0;font-size:.85rem;font-weight:700;line-height:1.6;color:var(--k-ink2)}
+.ai-status.is-on{color:var(--k-ink)}
+.ai-status.is-on::before{content:"";display:inline-block;width:.6em;height:.6em;border-radius:50%;background:var(--k-teal);margin-right:.4em;vertical-align:.08em}

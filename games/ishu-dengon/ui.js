@@ -11,15 +11,6 @@ function showScreen(id) {
 
 // ===== タイトル画面初期化 =====
 function initTitleScreen() {
-  document.querySelectorAll('#playerCount .toggle-btn').forEach(btn => {
-    btn.addEventListener('click', () => {
-      document.querySelectorAll('#playerCount .toggle-btn').forEach(b => b.classList.remove('active'));
-      btn.classList.add('active');
-      GameState.playerCount = parseInt(btn.dataset.value);
-      SoundManager.playClick();
-    });
-  });
-
   document.querySelectorAll('#difficulty .toggle-btn').forEach(btn => {
     btn.addEventListener('click', () => {
       document.querySelectorAll('#difficulty .toggle-btn').forEach(b => b.classList.remove('active'));
@@ -39,13 +30,6 @@ function initTitleScreen() {
   });
 
 
-  const claudeKeyInput = document.getElementById('claudeKeyInput');
-  if (claudeKeyInput) {
-    claudeKeyInput.addEventListener('input', () => {
-      GameState.claudeApiKey = claudeKeyInput.value.trim();
-    });
-  }
-
   document.getElementById('startBtn').addEventListener('click', () => {
     SoundManager.init();
     SoundManager.playNext();
@@ -54,8 +38,43 @@ function initTitleScreen() {
   });
 }
 
+// ===== 共通設定（人数・APIキー）=====
+const ISHU_MIN = 2, ISHU_MAX = 7;
+function sharedPartySize() {
+  const raw = Math.round(+Kit.settings.get().partySize) || 3;
+  return { raw, n: Math.max(ISHU_MIN, Math.min(ISHU_MAX, raw)) };
+}
+// 共通設定の値を GameState に反映（ゲーム開始時点の値を使う）
+function applySharedSettings() {
+  GameState.playerCount = sharedPartySize().n;
+  GameState.claudeApiKey = (Kit.settings.get().keys.claude || '').trim();
+}
+function renderSharedSettings() {
+  const { raw, n } = sharedPartySize();
+  const info = document.getElementById('partyInfo');
+  if (info) {
+    info.textContent = '';
+    const lead = document.createElement('span'); lead.className = 'party-lead'; lead.textContent = '参加：';
+    info.appendChild(lead);
+    info.appendChild(document.createTextNode(Kit.players(n).join('・') + `（${n}人）`));
+  }
+  const warn = document.getElementById('partyWarn');
+  if (warn) {
+    warn.hidden = raw === n;
+    warn.textContent = raw === n ? '' : `このゲームは${ISHU_MIN}〜${ISHU_MAX}人です。${n}人で遊びます`;
+  }
+  const ai = document.getElementById('aiStatus');
+  if (ai) {
+    const has = !!(Kit.settings.get().keys.claude || '').trim();
+    ai.classList.toggle('is-on', has);
+    ai.textContent = has ? 'AI変換・答え判定：使える'
+      : 'AI変換は使えません（タイトルの設定変更でClaude APIキーを入れると使えます）';
+  }
+}
+
 // ===== ゲーム開始 =====
 function startGame() {
+  applySharedSettings();
   GameState.reset();
   GameState._recorded = false;
   const { topic, category } = getRandomTopicWithCategory();

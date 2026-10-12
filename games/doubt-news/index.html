@@ -1,0 +1,788 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>ダウトニュース | あそびばこ</title>
+<link rel="stylesheet" href="../../kit/kit.css">
+<style>
+.lead{margin:8px 0 0;font-weight:900}
+.members{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+.members .k-chip{font-size:14px;padding:2px 12px}
+.rule{margin:8px 0 0;padding-left:20px;font-size:14px}
+.rule li{margin:2px 0}
+.newsinfo{font-weight:900;margin:8px 0 0}
+.newsinfo small{display:block;font-weight:700;color:var(--k-ink2);font-size:13px}
+.warn{border:3px dashed var(--k-pink);border-radius:12px;padding:10px 12px;background:color-mix(in srgb,var(--k-pink) 8%,var(--k-label));font-weight:900;font-size:14px;margin-top:8px}
+.btnrow{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
+
+/* 練習モードの帯 */
+.practice{position:sticky;top:64px;z-index:20;margin:0 0 12px;text-align:center;font-weight:900;font-size:13px;
+  background:var(--k-yellow);color:#1d2440;border:3px solid var(--k-ink);border-radius:999px;padding:3px 12px;box-shadow:2px 2px 0 var(--k-ink)}
+
+/* 進行 */
+.qhead{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap}
+.qhead .k-h2{font-size:20px}
+.progress{display:flex;gap:4px;margin-top:8px}
+.progress i{flex:1;height:8px;border:2px solid var(--k-ink);border-radius:99px;background:var(--k-label)}
+.progress i.done{background:var(--k-teal)}
+.progress i.now{background:var(--k-yellow)}
+
+/* ニュースの切り抜き */
+.news{display:grid;gap:14px}
+.clip{
+  position:relative;display:block;width:100%;text-align:left;
+  background-color:#fffcf3;
+  background-image:repeating-linear-gradient(0deg, transparent 0 25px, color-mix(in srgb,var(--k-ink) 6%,transparent) 25px 26px);
+  border:var(--k-line) solid var(--k-ink);border-radius:4px;box-shadow:var(--k-shadow);
+  padding:10px 12px 12px;color:var(--k-ink);
+  transform:rotate(var(--tilt,0deg));transition:transform .1s, box-shadow .1s;
+}
+.clip:nth-child(1){--tilt:-.6deg}.clip:nth-child(2){--tilt:.5deg}.clip:nth-child(3){--tilt:-.4deg}.clip:nth-child(4){--tilt:.6deg}
+.clip::after{ /* テープ */
+  content:"";position:absolute;top:-9px;right:18px;width:46px;height:16px;transform:rotate(6deg);
+  background:color-mix(in srgb,var(--k-teal) 35%,transparent);border:2px solid color-mix(in srgb,var(--k-ink) 20%,transparent);
+}
+button.clip{font:inherit;cursor:pointer}
+button.clip:active{transform:translate(4px,4px) rotate(var(--tilt));box-shadow:0 0 0 var(--k-ink)}
+.clip__top{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.letter{width:32px;height:32px;flex:none;border-radius:50%;border:3px solid var(--k-ink);background:var(--k-yellow);color:#1d2440;
+  display:inline-flex;align-items:center;justify-content:center;font-family:var(--k-display);font-size:16px;line-height:1}
+.cat{font-size:12px;font-weight:900;border:2px solid var(--k-ink);border-radius:4px;padding:0 8px;background:var(--k-label)}
+.cat.world{background:var(--k-blue);color:#fff}
+.cat.japan{background:var(--k-red);color:#fff}
+.clip__h{font-weight:900;font-size:17px;line-height:1.45;margin:8px 0 2px;overflow-wrap:anywhere;
+  border-bottom:2px solid var(--k-ink);padding-bottom:4px}
+.clip__s{font-size:14px;line-height:1.6;margin:4px 0 0;overflow-wrap:anywhere;color:var(--k-ink2);font-weight:700}
+.clip__src{margin:8px 0 0;font-size:13px;font-weight:900;overflow-wrap:anywhere}
+.clip__src a{color:var(--k-blue)}
+.clip.is-real{opacity:.92}
+.clip.is-fake{background-color:color-mix(in srgb,var(--k-red) 9%,#fffcf3)}
+.clip.is-pick{outline:4px solid var(--k-teal);outline-offset:3px}
+.verdict-chip{margin-left:auto}
+.doubt{
+  position:absolute;right:8px;bottom:10px;pointer-events:none;opacity:.88;
+  font-family:var(--k-display);font-size:clamp(26px,8.5vw,36px);line-height:1;letter-spacing:.04em;
+  color:var(--k-red);border:5px solid var(--k-red);border-radius:12px;padding:6px 12px 8px;
+  background:color-mix(in srgb,#fff 20%,transparent);
+  box-shadow:3px 3px 0 color-mix(in srgb,var(--k-pink) 35%,transparent);
+  transform:rotate(-12deg);animation:doubt .55s cubic-bezier(.2,1.6,.4,1) both;
+}
+@keyframes doubt{0%{transform:scale(2.8) rotate(-30deg);opacity:0}60%{opacity:.95}100%{transform:scale(1) rotate(-12deg);opacity:.88}}
+
+/* 回答（1台で全員） */
+.answers{display:grid;gap:8px;margin-top:8px}
+.arow{display:grid;grid-template-columns:minmax(0,1fr) repeat(4,42px);gap:6px;align-items:center}
+.arow .nm{font-weight:900;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.arow .nm small{font-weight:700;color:var(--k-ink2);margin-left:4px}
+.pick{height:42px;border:3px solid var(--k-ink);border-radius:10px;background:var(--k-label);font-family:var(--k-display);font-size:17px;box-shadow:2px 2px 0 var(--k-ink);padding:0}
+.pick[aria-pressed="true"]{background:var(--k-teal);color:#fff}
+.pick:active{transform:translate(2px,2px);box-shadow:none}
+@media (max-width:360px){
+  .arow{grid-template-columns:minmax(0,1fr) repeat(4,36px);gap:4px}
+  .pick{height:38px;font-size:15px;border-radius:8px}
+  .arow .nm{font-size:15px}
+}
+
+/* 得点表 */
+.board{display:grid;gap:8px}
+.brow{display:grid;grid-template-columns:30px minmax(0,1fr) auto;gap:10px;align-items:center;border:3px solid var(--k-ink);border-radius:12px;background:var(--k-label);padding:8px 12px}
+.brow.hit{background:color-mix(in srgb,var(--k-teal) 18%,var(--k-label))}
+.brow.top{background:color-mix(in srgb,var(--k-yellow) 45%,var(--k-label))}
+.brow .rk{font-family:var(--k-display);font-size:20px;text-align:center}
+.brow .nm{font-weight:900;overflow-wrap:anywhere}
+.brow .nm small{display:block;font-weight:700;color:var(--k-ink2);font-size:12px}
+.brow .pt{font-family:var(--k-display);font-size:24px}
+.brow .gain{font-size:13px;font-weight:900;color:var(--k-pink);margin-left:6px}
+.mark{font-family:var(--k-display);font-size:20px;text-align:center}
+.mark.o{color:var(--k-teal)}.mark.x{color:var(--k-red)}
+
+/* 読み込み */
+.press{display:flex;justify-content:center;gap:10px;margin:8px 0 14px}
+.press span{width:46px;height:58px;border:3px solid var(--k-ink);border-radius:4px;background:#fffcf3;box-shadow:3px 3px 0 var(--k-ink);
+  background-image:linear-gradient(var(--k-ink) 0 0),repeating-linear-gradient(0deg,transparent 0 6px,color-mix(in srgb,var(--k-ink) 35%,transparent) 6px 8px);
+  background-size:70% 6px, 70% 60%;background-position:50% 8px, 50% 24px;background-repeat:no-repeat;
+  animation:press 1.2s ease-in-out infinite}
+.press span:nth-child(2){animation-delay:.15s}.press span:nth-child(3){animation-delay:.3s}
+@keyframes press{0%,100%{transform:translateY(0) rotate(0)}40%{transform:translateY(-14px) rotate(-6deg)}}
+.big-verdict{font-family:var(--k-display);font-size:clamp(28px,9vw,40px);text-align:center;line-height:1.25}
+</style>
+</head>
+<body class="kit">
+<main class="k-wrap">
+  <div class="practice" id="practiceBar" hidden>練習用のサンプルです（すべて架空のニュース）</div>
+
+  <!-- 開始 -->
+  <section class="k-screen is-active k-stack" id="sSetup">
+    <div class="k-panel k-panel--tape k-center">
+      <h1 class="k-h1" style="margin-top:6px">ダウトニュース</h1>
+      <p class="lead">きのう今日のニュース4本。<br>1本だけまぎれた<b style="color:var(--k-red)">ウソ</b>を見破れ！</p>
+    </div>
+    <div class="k-panel">
+      <span class="k-tag">あそぶ人</span>
+      <div class="members" id="members"></div>
+      <p class="k-hint">人数と名前はタイトルの「みんなで遊ぶ」で変えられます。</p>
+    </div>
+    <div class="k-panel">
+      <span class="k-tag">何周する？</span>
+      <div class="k-seg" id="laps" style="margin-top:8px"></div>
+      <p class="k-hint" id="lapsHint"></p>
+    </div>
+    <div class="k-panel">
+      <span class="k-tag">ニュース</span>
+      <div id="newsBox"></div>
+    </div>
+    <div class="k-panel">
+      <span class="k-tag">ルール</span>
+      <ul class="rule">
+        <li>1問 ＝ ニュース4本（本物3本＋ニセ1本）。「世界」と「日本」のニュースが出ます。</li>
+        <li><b>1周 ＝ 3問</b>。周の数は上で選べます。</li>
+        <li>全員が「どれがウソか」を選んでから正解発表。見破れたら <b>+1点</b>。</li>
+        <li>最後にいちばん点が多い人の勝ち（1人なら6割正解でクリア）。</li>
+        <li>ニュースはAIがWeb検索で直近24時間から集め、ニセニュースもAIが作ります。</li>
+      </ul>
+    </div>
+    <button class="k-btn k-btn--primary k-btn--big k-btn--block" id="btnStart" data-se="start">スタート</button>
+  </section>
+
+  <!-- 読み込み -->
+  <section class="k-screen k-stack" id="sLoad">
+    <div class="k-panel k-center" style="padding:28px 16px">
+      <div class="press" aria-hidden="true"><span></span><span></span><span></span></div>
+      <div class="k-h2">見出しを集めています…</div>
+      <p class="k-dim" id="loadStep" style="margin:6px 0 0"></p>
+      <p class="k-hint" id="loadTime"></p>
+      <p class="k-hint">Web検索をするので、30秒〜1分ほどかかります。</p>
+    </div>
+    <button class="k-btn k-btn--ghost k-btn--block" id="btnCancel">やめる</button>
+  </section>
+
+  <!-- 取得失敗 -->
+  <section class="k-screen k-stack" id="sError">
+    <div class="k-panel k-center">
+      <div class="big-verdict" style="font-size:clamp(24px,7.5vw,32px);word-break:keep-all;overflow-wrap:anywhere">ニュースを取得<wbr>できませんでした</div>
+      <p style="font-weight:900;margin:10px 0 0" id="errMsg"></p>
+      <p class="k-hint" id="errDetail" style="overflow-wrap:anywhere"></p>
+    </div>
+    <button class="k-btn k-btn--primary k-btn--big k-btn--block" id="btnRetry">もう一度ためす</button>
+    <div class="k-grid2">
+      <button class="k-btn" id="btnErrBack">開始画面へ</button>
+      <button class="k-btn k-btn--yellow" id="btnErrPractice">練習モード</button>
+    </div>
+  </section>
+
+  <!-- 出題 -->
+  <section class="k-screen k-stack" id="sQ">
+    <div class="k-panel">
+      <div class="qhead"><div class="k-h2" id="qTitle"></div><span class="k-chip" id="qLap"></span></div>
+      <div class="progress" id="qProg"></div>
+      <p class="k-hint" id="qHint"></p>
+    </div>
+    <div class="news" id="qNews"></div>
+    <div class="k-panel" id="ansPanel">
+      <span class="k-tag">ウソはどれ？</span>
+      <div class="answers" id="answers"></div>
+    </div>
+    <button class="k-btn k-btn--primary k-btn--big k-btn--block" id="btnReveal" data-se="none">正解発表</button>
+  </section>
+
+  <!-- 正解発表 -->
+  <section class="k-screen k-stack" id="sR">
+    <div class="k-panel k-center">
+      <div class="big-verdict" id="rTitle"></div>
+      <p class="k-dim" id="rSub" style="margin:4px 0 0"></p>
+    </div>
+    <div class="news" id="rNews"></div>
+    <div class="k-panel">
+      <span class="k-tag">得点</span>
+      <div class="board" id="rBoard" style="margin-top:8px"></div>
+    </div>
+    <button class="k-btn k-btn--primary k-btn--big k-btn--block" id="btnNext" data-se="whoosh"></button>
+  </section>
+
+  <!-- 最終結果 -->
+  <section class="k-screen k-stack" id="sF">
+    <div class="k-panel k-panel--tape k-center">
+      <p class="k-dim" style="margin:8px 0 0" id="fLead"></p>
+      <div class="k-big" id="fWin" style="overflow-wrap:anywhere"></div>
+      <p style="margin:6px 0 0;font-weight:900" id="fSub"></p>
+    </div>
+    <div class="k-panel">
+      <span class="k-tag">最終順位</span>
+      <div class="board" id="fBoard" style="margin-top:8px"></div>
+    </div>
+    <div class="k-grid2">
+      <button class="k-btn" id="btnAgain">もう一度</button>
+      <button class="k-btn k-btn--primary" id="btnToSetup">開始画面へ</button>
+    </div>
+  </section>
+</main>
+
+<script src="../../kit/kit.js"></script>
+<script src="sample.js"></script>
+<script>
+(() => {
+'use strict';
+const ID = 'doubt-news';
+const CACHE_KEY = 'doubtNews.cache';
+const DAY = 24*60*60*1000;
+const PER_LAP = 3;
+const CLAUDE_MODEL = 'claude-sonnet-5-5';
+const GEMINI_MODEL = 'gemini-3.8-flash';
+const LETTERS = ['A','B','C','D'];
+const $ = id => document.getElementById(id);
+const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, Math.round(+v) || lo));
+const shuffle = a => { a = a.slice(); for(let i=a.length-1;i>0;i--){ const j = Math.floor(Math.random()*(i+1)); [a[i],a[j]] = [a[j],a[i]]; } return a; };
+const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+const safeUrl = u => { try{ const x = new URL(String(u)); return (x.protocol === 'https:' || x.protocol === 'http:') ? x.href : ''; }catch(e){ return ''; } };
+
+/* =========================================================
+   状態
+   ========================================================= */
+const fresh = () => ({
+  phase:'setup', practice:false,
+  players: Kit.players(clamp(Kit.settings.get().partySize, 1, 8)),
+  laps: 1, questions: [], qi: 0, picks: [], scores: [], hits: [], lastGain: null, recorded: false,
+});
+let S = fresh();
+const saved = Kit.load(ID);
+if(saved && (saved.phase === 'question' || saved.phase === 'reveal') && Array.isArray(saved.questions) && saved.questions.length){
+  S = Object.assign(fresh(), saved);
+}
+Kit.mount({ id: ID, title: 'ダウトニュース', onSave: () => {
+  if(S.phase !== 'question' && S.phase !== 'reveal') return null; // 開始画面・結果画面はセーブしない
+  const snap = JSON.parse(JSON.stringify(S));
+  if(snap.phase === 'question') snap.picks = snap.players.map(() => null); // 再開はその問題の頭から
+  return snap;
+}});
+
+const keys = () => { const k = Kit.settings.get().keys || {}; return { claude: String(k.claude||'').trim(), gemini: String(k.gemini||'').trim() }; };
+const hasKey = () => { const k = keys(); return !!(k.claude || k.gemini); };
+
+/* =========================================================
+   キャッシュ
+   { fetchedAt, provider, items:[{id,h,s,cat,src,url,at}], fakes:[{id,h,s,cat}], used:[id...] }
+   最初の取得から24時間で期限切れ（以降は丸ごと取り直す）
+   ========================================================= */
+function getCache(){
+  const c = Kit.store.get(CACHE_KEY, null);
+  if(!c || !c.fetchedAt || !Array.isArray(c.items) || !Array.isArray(c.fakes)) return null;
+  c.used = Array.isArray(c.used) ? c.used : [];
+  return c;
+}
+const isFresh = c => !!c && (Date.now() - c.fetchedAt) < DAY;
+function unused(c){
+  const used = new Set(c.used);
+  return { reals: c.items.filter(x => !used.has(x.id)), fakes: c.fakes.filter(x => !used.has(x.id)) };
+}
+function available(c){ if(!c) return 0; const u = unused(c); return Math.min(Math.floor(u.reals.length/3), u.fakes.length); }
+
+/* 未使用分から n 問を組み立て、使用済みにする */
+function buildQuestions(c, n){
+  const u = unused(c);
+  let world = shuffle(u.reals.filter(x => x.cat === 'world')), japan = shuffle(u.reals.filter(x => x.cat !== 'world'));
+  const fakes = shuffle(u.fakes);
+  const qs = [];
+  for(let q=0; q<n; q++){
+    const fake = fakes.shift(); if(!fake) break;
+    // 世界と日本がまざるように取る（多いほうから先に、次は反対側）
+    const take = w => { const a = w ? world : japan, b = w ? japan : world; return a.length ? a.shift() : b.shift(); };
+    const real = [];
+    real.push(take(world.length >= japan.length));
+    real.push(take(real[0] && real[0].cat !== 'world'));
+    real.push(take(world.length >= japan.length));
+    if(real.some(x => !x)) break;
+    const items = shuffle([...real.map(r => ({h:r.h, s:r.s, cat:r.cat, src:r.src, url:r.url, at:r.at, fake:false})), {h:fake.h, s:fake.s, cat:fake.cat, fake:true}]);
+    qs.push({ items, fake: items.findIndex(x => x.fake) });
+    c.used.push(fake.id, ...real.map(r => r.id));
+  }
+  Kit.store.set(CACHE_KEY, c);
+  return qs;
+}
+
+/* =========================================================
+   ニュース取得（AI + Web検索）
+   ========================================================= */
+class NewsError extends Error{ constructor(msg, detail){ super(msg); this.detail = detail || ''; } }
+
+function jstNow(){
+  const d = new Date();
+  const f = new Intl.DateTimeFormat('ja-JP', { timeZone:'Asia/Tokyo', year:'numeric', month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit', hour12:false }).formatToParts(d);
+  const p = Object.fromEntries(f.map(x => [x.type, x.value]));
+  return { text: `${p.year}年${p.month}月${p.day}日 ${p.hour}:${p.minute}（日本時間）`, iso: d.toISOString() };
+}
+
+function buildPrompt(nQ, exclude){
+  const now = jstNow();
+  const nReal = nQ*3, nWorld = Math.ceil(nReal/2), nJapan = nReal - nWorld;
+  const system = 'あなたはニュースクイズ「ダウトニュース」の編集者です。Web検索で実際のニュースを集め、指定のJSONだけを出力します。前置き・説明・コードブロックは書きません。';
+  const prompt = `現在は ${now.text}（UTC ${now.iso}）です。
+Web検索を使い、この時刻から過去24時間以内に報じられたニュースを集めて、クイズ用のデータを作ってください。
+
+■ 本物のニュース（real）: ${nReal}本
+- 世界のニュース（category:"world"）${nWorld}本、日本のニュース（category:"japan"）${nJapan}本。
+- 必ず検索結果で確認できた、過去24時間以内の実際の報道だけ。記事のURL・媒体名・公開日時を付ける。URLは検索結果に出てきた記事ページのURLをそのまま使う。
+- 政治・経済・科学・スポーツ・文化・くらし・テクノロジーなど、話題をばらけさせる。
+- パーティで楽しく遊べるよう、人が亡くなった事件・事故・災害・戦闘のニュースはなるべく避ける。
+- 同じ出来事を2本以上入れない。${exclude.length ? '\n- 次の見出しと同じ出来事は除く: ' + exclude.slice(0, 60).map(h => '「' + h + '」').join('') : ''}
+
+■ ニセのニュース（fake）: ${nQ}本
+- 同じ時期に本当にありそうだが、事実ではない架空のニュース。本物と同じ文体・同じ長さ・同じくらいの具体性で書く。
+- 本物のニュースの言い換えや、明らかなジョークにはしない。検索で確かめた事実と矛盾しない、もっともらしい内容にする。
+- 禁止: 実在の人物の名誉を傷つける内容（不祥事・犯罪・病気・失言など）、人が死傷した事件・事故・災害・テロ、健康や医療のデマ、選挙や投票に関するデマ、特定の国籍・民族・宗教への偏見。実在の個人名はできるだけ使わない。
+- world と japan をおよそ半々に。
+
+■ 書き方（すべて日本語）
+- headline: 新聞の見出し風、35文字以内。
+- summary: 2行ほどの要約、60〜80文字。
+- source: 媒体名（例: NHK、共同通信、Reuters、BBC）。published: ISO 8601 の日時。
+
+■ 出力（このJSONだけ）
+{"real":[{"headline":"","summary":"","category":"world","source":"","url":"https://...","published":"2026-01-01T09:00:00+09:00"}],"fake":[{"headline":"","summary":"","category":"japan"}]}`;
+  return { system, prompt };
+}
+
+function parseJson(text){
+  if(!text) throw new NewsError('JSONが壊れていました', 'AIの返答が空でした');
+  let t = String(text).replace(/```(?:json)?/gi, '');
+  const a = t.indexOf('{'), b = t.lastIndexOf('}');
+  if(a < 0 || b <= a) throw new NewsError('JSONが壊れていました', 'AIの返答にJSONがありませんでした');
+  try{ return JSON.parse(t.slice(a, b+1)); }
+  catch(e){ throw new NewsError('JSONが壊れていました', e.message); }
+}
+
+function httpError(status, msg){
+  if(status === 401 || status === 403) return new NewsError('APIキーが正しくないようです', `HTTP ${status} ${msg||''}`);
+  if(status === 429) return new NewsError('APIの利用上限か、混み合っています。少し待ってください', `HTTP ${status} ${msg||''}`);
+  if(status === 400 && /credit|billing|balance/i.test(msg||'')) return new NewsError('APIの残高・請求設定を確認してください', msg);
+  return new NewsError('APIでエラーが起きました', `HTTP ${status} ${msg||''}`);
+}
+async function post(url, headers, body, signal){
+  let res;
+  try{ res = await fetch(url, { method:'POST', headers, body: JSON.stringify(body), signal }); }
+  catch(e){
+    if(e && e.name === 'AbortError') throw e;
+    throw new NewsError('通信に失敗しました。電波やネット接続を確認してください', e && e.message);
+  }
+  const data = await res.json().catch(() => null);
+  if(!res.ok){
+    const m = data && (data.error && (data.error.message || data.error.status)) || '';
+    const err = httpError(res.status, typeof m === 'string' ? m : JSON.stringify(m));
+    err.status = res.status; throw err;
+  }
+  if(!data) throw new NewsError('JSONが壊れていました', 'APIの応答を読めませんでした');
+  return data;
+}
+
+/* Claude: Messages API + web_search ツール（サーバ側で検索） */
+async function fetchClaude(key, nQ, exclude, signal){
+  const { system, prompt } = buildPrompt(nQ, exclude);
+  const headers = { 'content-type':'application/json', 'x-api-key': key, 'anthropic-version':'2023-06-01', 'anthropic-dangerous-direct-browser-access':'true' };
+  const tools = [{ type:'web_search_20250305', name:'web_search', max_uses: 8, user_location:{ type:'approximate', country:'JP', timezone:'Asia/Tokyo' } }];
+  const messages = [{ role:'user', content: prompt }];
+  const searchUrls = new Set();
+  let data = null, finalText = '';
+  for(let turn=0; turn<4; turn++){
+    data = await post('https://api.anthropic.com/v1/messages', headers, { model: CLAUDE_MODEL, max_tokens: 8000, system, messages, tools }, signal);
+    const content = Array.isArray(data.content) ? data.content : [];
+    let lastTool = -1;
+    content.forEach((b, i) => {
+      if(b.type === 'web_search_tool_result'){
+        lastTool = i;
+        if(Array.isArray(b.content)) b.content.forEach(r => { if(r && r.url) searchUrls.add(r.url); });
+      }
+    });
+    // 最後の検索結果より後ろの text ブロック（引用付きで分割されていても連結すれば元の文）
+    finalText = content.slice(lastTool + 1).filter(b => b.type === 'text').map(b => b.text).join('');
+    if(data.stop_reason === 'pause_turn'){ messages.push({ role:'assistant', content }); continue; }
+    break;
+  }
+  if(data && data.stop_reason === 'max_tokens') throw new NewsError('JSONが壊れていました', '返答が長すぎて途中で切れました');
+  return { json: parseJson(finalText), searchUrls };
+}
+
+/* Gemini: Interactions API + google_search（なければ generateContent + google_search） */
+async function fetchGemini(key, nQ, exclude, signal){
+  const { system, prompt } = buildPrompt(nQ, exclude);
+  const headers = { 'content-type':'application/json', 'x-goog-api-key': key };
+  const searchUrls = new Set();
+  let text = '';
+  try{
+    const data = await post('https://generativelanguage.googleapis.com/v1beta/interactions', headers,
+      { model: GEMINI_MODEL, system_instruction: system, input: prompt, tools: [{ type:'google_search' }] }, signal);
+    if(data.status && data.status !== 'completed' && Array.isArray(data.errors) && data.errors.length)
+      throw new NewsError('APIでエラーが起きました', data.errors.map(e => e.message).join(' / '));
+    const steps = Array.isArray(data.steps) ? data.steps : Array.isArray(data.outputs) ? data.outputs : [];
+    steps.filter(s => s && (s.type === 'model_output' || s.type === 'text' || !s.type)).forEach(s => {
+      const cs = Array.isArray(s.content) ? s.content : (s.type === 'text' ? [s] : []);
+      cs.forEach(c => {
+        if(c && c.type === 'text' && typeof c.text === 'string'){
+          text += c.text;
+          (c.annotations||[]).forEach(a => { if(a && a.url) searchUrls.add(a.url); });
+        }
+      });
+    });
+  }catch(e){
+    if(!(e instanceof NewsError) || e.status !== 404) throw e;
+    // 旧エンドポイントでの呼び出し
+    const data = await post(`https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`, headers, {
+      systemInstruction: { parts: [{ text: system }] },
+      contents: [{ role:'user', parts: [{ text: prompt }] }],
+      tools: [{ google_search: {} }],
+    }, signal);
+    const cand = (data.candidates || [])[0];
+    if(!cand) throw new NewsError('APIでエラーが起きました', 'candidates が空でした');
+    text = ((cand.content && cand.content.parts) || []).map(p => p.text || '').join('');
+    const gm = cand.groundingMetadata || {};
+    (gm.groundingChunks || []).forEach(g => { if(g.web && g.web.uri) searchUrls.add(g.web.uri); });
+  }
+  return { json: parseJson(text), searchUrls: new Set() /* Gemini の出典はリダイレクトURLなのでホスト照合はしない */ };
+}
+
+const normH = s => String(s||'').replace(/[\s　「」『』【】、。・!！?？"'“”]/g, '').toLowerCase();
+const host = u => { try{ return new URL(u).hostname.replace(/^www\./, ''); }catch(e){ return ''; } };
+
+/* AIの返答を検証して、キャッシュ用の形にする */
+function normalize(json, searchUrls, existing){
+  const seen = new Set(existing.map(normH)), seenUrl = new Set();
+  const str = (v, n) => String(v == null ? '' : v).replace(/\s+/g, ' ').trim().slice(0, n);
+  const catOf = v => /japan|日本|jp|domestic|国内/i.test(String(v||'')) ? 'japan' : 'world';
+  const reals = [], fakes = [];
+  const rawReal = Array.isArray(json && json.real) ? json.real : Array.isArray(json && json.news) ? json.news : [];
+  const rawFake = Array.isArray(json && json.fake) ? json.fake : Array.isArray(json && json.fakes) ? json.fakes : [];
+  const hosts = new Set([...searchUrls].map(host).filter(Boolean));
+  const now = Date.now();
+  let offHost = [];
+  rawReal.forEach(r => {
+    if(!r || typeof r !== 'object') return;
+    const h = str(r.headline || r.title, 60), s = str(r.summary, 140), url = safeUrl(r.url);
+    if(!h || !url) return;
+    const k = normH(h);
+    if(seen.has(k) || seenUrl.has(url)) return;
+    const t = Date.parse(r.published || r.date || '');
+    if(isFinite(t) && now - t > 2*DAY) return; // 古すぎる記事は外す
+    const it = { id: uid(), h, s, cat: catOf(r.category), src: str(r.source, 30) || host(url), url, at: isFinite(t) ? new Date(t).toISOString() : '' };
+    seen.add(k); seenUrl.add(url);
+    if(hosts.size && !hosts.has(host(url))) offHost.push(it); else reals.push(it);
+  });
+  // 検索結果に無いサイトのURLは基本的に外す（ただし大半が外れる場合は媒体URLの書き方の違いとみなして残す）
+  if(offHost.length && reals.length >= 3) offHost = [];
+  reals.push(...offHost);
+  rawFake.forEach(f => {
+    if(!f || typeof f !== 'object') return;
+    const h = str(f.headline || f.title, 60), s = str(f.summary, 140);
+    if(!h) return;
+    const k = normH(h); if(seen.has(k)) return;
+    seen.add(k); fakes.push({ id: uid(), h, s, cat: catOf(f.category) });
+  });
+  return { reals, fakes };
+}
+
+let abortCtl = null;
+/* 必要な問題数そろうまで取得（最大3回） */
+async function ensureNews(needed, force, onStep){
+  const k = keys();
+  if(!k.claude && !k.gemini) throw new NewsError('APIキーがありません');
+  let c = getCache();
+  if(force || !isFresh(c)) c = { fetchedAt: 0, provider: '', items: [], fakes: [], used: [] };
+  for(let attempt=1; available(c) < needed && attempt <= 3; attempt++){
+    const nQ = clamp(needed - available(c), 4, 6);
+    onStep && onStep(attempt, nQ);
+    abortCtl = new AbortController();
+    const timer = setTimeout(() => abortCtl.abort(), 180000);
+    let got;
+    try{
+      got = k.claude ? await fetchClaude(k.claude, nQ, c.items.map(x => x.h), abortCtl.signal)
+                     : await fetchGemini(k.gemini, nQ, c.items.map(x => x.h), abortCtl.signal);
+    }finally{ clearTimeout(timer); }
+    const { reals, fakes } = normalize(got.json, got.searchUrls, [...c.items, ...c.fakes].map(x => x.h));
+    if(reals.length < 3 || !fakes.length){
+      if(available(c) > 0) break; // 取れた分で遊ぶ
+      throw new NewsError('ニュースの数が足りませんでした', `本物${reals.length}本・ニセ${fakes.length}本（URL付きの本物が3本以上必要）`);
+    }
+    if(!c.fetchedAt) c.fetchedAt = Date.now();
+    c.provider = k.claude ? 'claude' : 'gemini';
+    c.items.push(...reals); c.fakes.push(...fakes);
+    Kit.store.set(CACHE_KEY, c);
+  }
+  return c;
+}
+
+/* =========================================================
+   開始画面
+   ========================================================= */
+function fmtTime(t){ const d = new Date(t); return `${d.getMonth()+1}月${d.getDate()}日 ${d.getHours()}時${String(d.getMinutes()).padStart(2,'0')}分`; }
+function leftText(t){
+  const ms = t + DAY - Date.now();
+  if(ms <= 0) return '期限切れ';
+  const h = Math.floor(ms/3600000);
+  return h >= 1 ? `あと${h}時間有効` : `あと${Math.max(1, Math.ceil(ms/60000))}分有効`;
+}
+function drawSetup(){
+  S.players = Kit.players(clamp(Kit.settings.get().partySize, 1, 8));
+  $('members').innerHTML = S.players.map(p => `<span class="k-chip">${esc(p)}</span>`).join('') + `<span class="k-chip k-chip--teal">${S.players.length}人</span>`;
+  $('laps').innerHTML = [1,2,3,4,5].map(n => `<button type="button" data-v="${n}" aria-pressed="${n === S.laps}">${n}周</button>`).join('');
+  $('lapsHint').textContent = `1周＝3問。${S.laps}周で全${S.laps*PER_LAP}問です。`;
+  const c = getCache(), need = S.laps*PER_LAP;
+  if(!hasKey()){
+    $('newsBox').innerHTML = `<div class="warn">ニュースの取得にはAPIキーが必要です。タイトルの「設定変更」で Claude か Gemini のキーを入れてください。</div>
+      <div class="btnrow"><a class="k-btn k-btn--teal k-btn--sm" href="../../index.html#settings">設定変更を開く</a>
+      <button class="k-btn k-btn--yellow k-btn--sm" id="btnPractice" type="button">練習モード（サンプルニュース）</button></div>
+      <p class="k-hint">練習モードは架空のサンプル3問（1周）で遊べます。</p>`;
+    $('btnStart').textContent = 'スタート（キーが必要）'; $('btnStart').disabled = true;
+    return;
+  }
+  $('btnStart').disabled = false;
+  const k = keys(), via = k.claude ? 'Claude' : 'Gemini';
+  if(isFresh(c)){
+    const av = available(c);
+    $('newsBox').innerHTML = `<p class="newsinfo">ニュース：${esc(fmtTime(c.fetchedAt))}に取得（${esc(leftText(c.fetchedAt))}）
+      <small>まだ出していない問題：${av}問${av < need ? `（足りない${need-av}問ぶんはスタート時に追加で集めます）` : ''}</small></p>
+      <div class="btnrow"><button class="k-btn k-btn--sm" id="btnRefresh" type="button" data-se="whoosh">今すぐ更新</button></div>
+      <p class="k-hint">${via} のWeb検索で集めます。取得から24時間たつと、次のスタートで新しく集め直します。</p>`;
+    $('btnStart').textContent = av >= need ? 'スタート' : 'ニュースを集めてスタート';
+  }else{
+    $('newsBox').innerHTML = `<p class="newsinfo">ニュース：${c ? `前回の取得（${esc(fmtTime(c.fetchedAt))}）から24時間たちました` : 'まだ取得していません'}
+      <small>スタートすると、${via} のWeb検索で直近24時間のニュースを集めます。</small></p>
+      <div class="btnrow"><button class="k-btn k-btn--sm" id="btnRefresh" type="button" data-se="whoosh">今すぐ取得</button></div>`;
+    $('btnStart').textContent = 'ニュースを集めてスタート';
+  }
+}
+$('laps').addEventListener('click', e => {
+  const b = e.target.closest('button'); if(!b) return;
+  S.laps = +b.dataset.v; Kit.SE.play('select'); drawSetup();
+});
+$('newsBox').addEventListener('click', e => {
+  if(e.target.closest('#btnPractice')) startPractice();
+  if(e.target.closest('#btnRefresh')) runFetch({ force: true, start: false });
+});
+
+let lastRun = null;
+async function runFetch(opt){
+  lastRun = opt;
+  const need = S.laps*PER_LAP;
+  Kit.screen('sLoad');
+  const t0 = Date.now();
+  $('loadStep').textContent = '';
+  const tick = setInterval(() => { $('loadTime').textContent = `${Math.floor((Date.now()-t0)/1000)}秒`; }, 500);
+  $('loadTime').textContent = '0秒';
+  try{
+    const c = await ensureNews(opt.force ? Math.max(4, opt.start ? need : 4) : need, !!opt.force, (n, q) => {
+      $('loadStep').textContent = n === 1 ? `世界と日本のニュースを${q*3}本＋ニセ${q}本` : `追加で集めています（${n}回目）`;
+    });
+    clearInterval(tick);
+    Kit.SE.play('ok');
+    if(!opt.start){ Kit.toast('ニュースを更新しました'); drawSetup(); Kit.screen('sSetup'); return; }
+    startGame(c);
+  }catch(e){
+    clearInterval(tick);
+    if(e && e.name === 'AbortError'){
+      if(cancelled){ cancelled = false; drawSetup(); Kit.screen('sSetup'); return; }
+      e = new NewsError('時間がかかりすぎたので止めました', '3分以内に返答がありませんでした');
+    }
+    console.warn(e);
+    Kit.SE.play('ng');
+    $('errMsg').textContent = e instanceof NewsError ? e.message : '思わぬエラーが起きました';
+    $('errDetail').textContent = e instanceof NewsError ? e.detail : String(e && e.message || e);
+    Kit.screen('sError');
+  }
+}
+let cancelled = false;
+$('btnCancel').addEventListener('click', () => { cancelled = true; if(abortCtl) abortCtl.abort(); });
+$('btnRetry').addEventListener('click', () => runFetch(lastRun || { force:false, start:true }));
+$('btnErrBack').addEventListener('click', () => { drawSetup(); Kit.screen('sSetup'); });
+$('btnErrPractice').addEventListener('click', startPractice);
+
+$('btnStart').addEventListener('click', () => {
+  if(!hasKey()) return;
+  const c = getCache(), need = S.laps*PER_LAP;
+  if(isFresh(c) && available(c) >= need) startGame(c);
+  else runFetch({ force:false, start:true });
+});
+
+/* =========================================================
+   ゲーム進行
+   ========================================================= */
+function begin(questions, practice){
+  S.practice = practice;
+  S.players = Kit.players(clamp(Kit.settings.get().partySize, 1, 8));
+  S.questions = questions; S.qi = 0;
+  S.scores = S.players.map(() => 0); S.hits = S.players.map(() => 0);
+  S.recorded = false;
+  toQuestion();
+}
+function startGame(c){
+  const need = S.laps*PER_LAP;
+  const qs = buildQuestions(c, need);
+  if(!qs.length){ runFetch({ force:true, start:true }); return; }
+  if(qs.length < need) Kit.toast(`ニュースが足りないので${qs.length}問にしました`, 2400);
+  begin(qs, false);
+}
+function startPractice(){
+  const qs = (window.DOUBT_NEWS_SAMPLE || []).map(q => {
+    const items = shuffle([...q.real.map(r => Object.assign({ src:'練習用サンプル（架空）', url:'', fake:false }, r)), Object.assign({ fake:true }, q.fake)]);
+    return { items, fake: items.findIndex(x => x.fake) };
+  });
+  S.laps = 1;
+  begin(qs, true);
+}
+const total = () => S.questions.length;
+const lapOf = i => Math.floor(i / PER_LAP) + 1;
+const lapsTotal = () => Math.ceil(total() / PER_LAP);
+const solo = () => S.players.length === 1;
+
+function clipHtml(it, i, mode){
+  const cat = it.cat === 'world' ? '<span class="cat world">世界</span>' : '<span class="cat japan">日本</span>';
+  let extra = '', cls = 'clip', badge = '';
+  if(mode === 'reveal'){
+    cls += it.fake ? ' is-fake' : ' is-real';
+    badge = it.fake ? '<span class="k-chip k-chip--pink verdict-chip">ウソ</span>' : '<span class="k-chip k-chip--teal verdict-chip">本物</span>';
+    if(it.fake) extra = '<div class="doubt" aria-hidden="true">ダウト！</div>';
+    else{
+      const u = safeUrl(it.url);
+      const src = esc(it.src || (u ? host(u) : ''));
+      extra = `<p class="clip__src">出典：${u ? `<a href="${esc(u)}" target="_blank" rel="noopener noreferrer">${src || esc(host(u))} ↗</a>` : src}${it.at ? ` <span class="k-dim">${esc(fmtTime(Date.parse(it.at)))}</span>` : ''}</p>`;
+    }
+  }
+  const inner = `<div class="clip__top"><span class="letter">${LETTERS[i]}</span>${cat}${badge}</div>
+    <div class="clip__h">${esc(it.h)}</div><p class="clip__s">${esc(it.s)}</p>${extra}`;
+  if(mode === 'pick') return `<button type="button" class="${cls}" data-i="${i}" data-se="select" aria-label="${LETTERS[i]}がウソだと思う">${inner}</button>`;
+  return `<article class="${cls}">${inner}</article>`;
+}
+
+function drawProgress(){
+  $('qProg').innerHTML = S.questions.map((q, i) => `<i class="${i < S.qi ? 'done' : i === S.qi ? 'now' : ''}"></i>`).join('');
+}
+function toQuestion(){
+  S.phase = 'question'; S.lastGain = null;
+  S.picks = S.players.map(() => null);
+  const q = S.questions[S.qi];
+  $('practiceBar').hidden = !S.practice;
+  $('qTitle').textContent = `第${S.qi+1}問 / ${total()}`;
+  $('qLap').textContent = `${lapOf(S.qi)}周目 / ${lapsTotal()}`;
+  $('qHint').textContent = solo() ? 'ウソだと思うニュースをタップ！' : 'ウソだと思うニュースを、全員が下で選んでね。';
+  drawProgress();
+  $('qNews').innerHTML = q.items.map((it, i) => clipHtml(it, i, solo() ? 'pick' : 'show')).join('');
+  $('ansPanel').hidden = solo(); $('btnReveal').hidden = solo();
+  drawAnswers();
+  Kit.screen('sQ');
+}
+function drawAnswers(){
+  if(solo()) return;
+  $('answers').innerHTML = S.players.map((p, pi) => `<div class="arow"><span class="nm">${esc(p)}<small>${S.scores[pi]}点</small></span>${
+    LETTERS.map((L, li) => `<button type="button" class="pick" data-p="${pi}" data-l="${li}" data-se="select" aria-pressed="${S.picks[pi] === li}" aria-label="${esc(p)}は${L}">${L}</button>`).join('')}</div>`).join('');
+  const left = S.picks.filter(x => x == null).length;
+  $('btnReveal').disabled = left > 0;
+  $('btnReveal').textContent = left ? `正解発表（あと${left}人）` : '正解発表';
+}
+$('answers').addEventListener('click', e => {
+  const b = e.target.closest('.pick'); if(!b) return;
+  S.picks[+b.dataset.p] = +b.dataset.l; drawAnswers();
+});
+$('qNews').addEventListener('click', e => {
+  const b = e.target.closest('button.clip'); if(!b || !solo() || S.phase !== 'question') return;
+  S.picks[0] = +b.dataset.i;
+  b.classList.add('is-pick');
+  setTimeout(reveal, 260);
+});
+$('btnReveal').addEventListener('click', () => { if(S.picks.every(x => x != null)) reveal(); });
+
+function reveal(){
+  if(S.phase !== 'question') return;
+  const q = S.questions[S.qi];
+  S.lastGain = S.players.map((p, i) => S.picks[i] === q.fake ? 1 : 0);
+  S.lastGain.forEach((g, i) => { S.scores[i] += g; S.hits[i] += g; });
+  S.phase = 'reveal';
+  showReveal(true);
+}
+function showReveal(fx){
+  const q = S.questions[S.qi];
+  $('practiceBar').hidden = !S.practice;
+  const n = S.lastGain.filter(Boolean).length;
+  if(solo()){
+    $('rTitle').textContent = n ? '見破った！' : 'だまされた…';
+    $('rSub').textContent = `ウソは ${LETTERS[q.fake]}。あなたは ${LETTERS[S.picks[0]]} を選びました`;
+  }else{
+    $('rTitle').textContent = n === S.players.length ? '全員見破った！' : n === 0 ? '全員だまされた！' : `${n}人が見破った！`;
+    $('rSub').textContent = `ウソは ${LETTERS[q.fake]} のニュースでした`;
+  }
+  $('rNews').innerHTML = q.items.map((it, i) => clipHtml(it, i, 'reveal')).join('');
+  $('rBoard').innerHTML = S.players.map((p, i) => {
+    const hit = S.lastGain[i] > 0, pk = S.picks[i];
+    return `<div class="brow ${hit ? 'hit' : ''}"><span class="mark ${hit ? 'o' : 'x'}">${hit ? '○' : '×'}</span>
+      <span class="nm">${esc(p)}<small>${pk == null ? '' : LETTERS[pk] + ' を選択'}</small></span>
+      <span><span class="pt">${S.scores[i]}</span>${hit ? '<span class="gain">+1</span>' : ''}</span></div>`;
+  }).join('');
+  $('btnNext').textContent = S.qi + 1 >= total() ? '結果発表へ' : '次の問題へ';
+  Kit.screen('sR');
+  if(fx){
+    Kit.SE.play('stamp');
+    setTimeout(() => Kit.SE.play(n ? 'ok' : 'ng'), 380);
+    if(!n) setTimeout(() => Kit.shake($('rTitle')), 380);
+    if(navigator.vibrate) navigator.vibrate(n ? [30,30,60] : [120]);
+  }
+}
+$('btnNext').addEventListener('click', () => {
+  if(S.phase !== 'reveal') return;
+  S.qi++;
+  if(S.qi >= total()) return toFinal();
+  toQuestion();
+});
+
+function rankOf(i){ return 1 + S.scores.filter(s => s > S.scores[i]).length; }
+async function toFinal(){
+  S.phase = 'final';
+  Kit.clearSave(ID);
+  $('practiceBar').hidden = !S.practice;
+  const n = total(), top = Math.max(...S.scores);
+  const order = S.players.map((p, i) => i).sort((a, b) => S.scores[b] - S.scores[a] || a - b);
+  $('fBoard').innerHTML = order.map(i => `<div class="brow ${S.scores[i] === top ? 'top' : ''}"><span class="rk">${rankOf(i)}</span>
+    <span class="nm">${esc(S.players[i])}<small>${n}問中${S.hits[i]}問 見破った</small></span><span class="pt">${S.scores[i]}</span></div>`).join('');
+  Kit.screen('sF');
+  const detail = `${S.practice ? '練習・' : ''}${n}問中`;
+  let fx;
+  if(solo()){
+    const rate = n ? S.hits[0] / n : 0, ok = rate >= 0.6;
+    $('fLead').textContent = '見破った数';
+    $('fWin').textContent = `${S.hits[0]} / ${n}`;
+    $('fSub').textContent = `正答率 ${Math.round(rate*100)}%（60%以上でクリア）`;
+    if(!S.recorded){ S.recorded = true; Kit.record({ game: ID, player: S.players[0], result: ok ? 'clear' : 'fail', score: S.hits[0], detail: `${detail}${S.hits[0]}問` }); }
+    fx = ok ? Kit.celebrate({ title:'クリア!', sub:`${n}問中${S.hits[0]}問 見破った` }) : Kit.fail({ title:'だまされた…', sub:`${n}問中${S.hits[0]}問` });
+  }else{
+    const wins = S.players.filter((p, i) => S.scores[i] === top), draw = wins.length === S.players.length;
+    $('fLead').textContent = draw ? '全員同点！' : 'いちばんウソを見破ったのは';
+    $('fWin').textContent = draw ? '引き分け' : wins.join('・');
+    $('fSub').textContent = `${top}点（${n}問中${top}問）`;
+    if(!S.recorded){
+      S.recorded = true;
+      const group = Kit.newGroup();
+      S.players.forEach((p, i) => Kit.record({ game: ID, player: p, result: draw ? 'play' : S.scores[i] === top ? 'win' : 'lose', score: S.hits[i], detail: `${detail}${S.hits[i]}問`, group }));
+    }
+    fx = draw ? Kit.celebrate({ title:'引き分け!', sub:`全員 ${top}点` }) : Kit.celebrate({ title:'優勝!', sub:`${wins.join('・')}（${top}点）`, ms:2800 });
+  }
+  await fx;
+}
+$('btnAgain').addEventListener('click', () => {
+  const p = S.practice;
+  S = Object.assign(fresh(), { laps: S.laps });
+  $('practiceBar').hidden = true;
+  if(p) return startPractice();
+  drawSetup();
+  $('btnStart').click();
+});
+$('btnToSetup').addEventListener('click', () => {
+  const laps = S.laps; S = Object.assign(fresh(), { laps });
+  $('practiceBar').hidden = true; drawSetup(); Kit.screen('sSetup');
+});
+
+/* ---------- 起動・再開 ---------- */
+drawSetup();
+if(S.phase === 'question'){ toQuestion(); Kit.toast('つづきから再開します（この問題の最初から）'); }
+else if(S.phase === 'reveal' && S.lastGain){ showReveal(false); Kit.toast('つづきから再開します'); }
+else { S = Object.assign(fresh(), { laps: S.laps }); }
+Kit.onChange(r => { if(r === 'settings' && S.phase === 'setup') drawSetup(); });
+})();
+</script>
+</body>
+</html>

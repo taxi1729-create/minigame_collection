@@ -138,13 +138,11 @@ footer{text-align:center;font-size:12px;color:var(--ink2);margin-top:24px}
     </div>
 
     <div class="custom" id="customBox" hidden>
-      <label class="lbl" for="customText">エピソードを三行で書いてください（1行目＝導入／2行目＝展開／3行目＝結論）</label>
-      <textarea id="customText" placeholder="例）&#10;朝、寝ぼけたまま歯みがき粉を手に取った。&#10;ところが、なんだか味がおかしくて首をかしげた。&#10;よく見ると、それは洗顔フォームだった。"></textarea>
+      <label class="lbl" for="customText">エピソードを三行で書いてください（1行目＝導入／2行目＝展開／3行目＝結論。各1文・20〜30字くらいが目安）</label>
+      <textarea id="customText" placeholder="例）&#10;寝ぼけたまま、歯みがき粉を歯ブラシにのせた。&#10;ところが、みがくと味がおかしくて首をかしげた。&#10;よく見ると、それは洗顔フォームだった。"></textarea>
       <details class="api" id="apiDetails">
-        <summary>🔑 Claude API 設定</summary>
-        <label class="lbl" for="apiKey">API キー</label>
-        <input type="password" id="apiKey" autocomplete="off" placeholder="sk-ant-...">
-        <p class="hint">キーはこの端末だけに保存され、あそびばこの共通設定（Claude API キー）と共有されます。</p>
+        <summary>🔑 AIの設定</summary>
+        <p class="hint" id="keyState"></p>
         <label class="lbl" for="apiModel">モデル</label>
         <select id="apiModel">
           <option value="claude-haiku-4-5-20251001">Claude Haiku 4.5（速い・安い）</option>
@@ -513,18 +511,21 @@ function renderLog(){
 function renderAll(){ renderEpisode(); renderElements(); renderControls(); renderLog(); }
 
 // ---------- custom episode via Claude API ----------
-const apiKeyEl = $('apiKey'), modelEl = $('apiModel');
+const modelEl = $('apiModel');
 // APIキーは共通設定（Kit.settings keys.claude）を使う。旧 mugon.apikey は共通設定が空のときだけ移行
 (() => {
   const old = store.get('mugon.apikey', '');
   if(old && !Kit.settings.get().keys.claude) Kit.settings.set({ keys:{ claude: old } });
   if(old) store.del('mugon.apikey');
 })();
-const saveKey = () => { const k = apiKeyEl.value.trim(); if(k !== Kit.settings.get().keys.claude) Kit.settings.set({ keys:{ claude: k } }); };
-apiKeyEl.value = Kit.settings.get().keys.claude || '';
+// APIキーはタイトルの「設定変更」で入れたものを使う（このゲームに入力欄はない）
+const claudeKey = () => (Kit.settings.get().keys.claude || '').trim();
+const drawKeyState = () => { $('keyState').textContent = claudeKey()
+  ? 'Claude APIキー：設定済み（タイトルの「設定変更」で変えられます）'
+  : 'Claude APIキーが未設定です。タイトルの「設定変更」で入れると使えます。'; };
+drawKeyState();
 modelEl.value = store.get('mugon.model', modelEl.value) || modelEl.value;
 if(!modelEl.value) modelEl.selectedIndex = 0;
-apiKeyEl.addEventListener('change', saveKey);
 modelEl.addEventListener('change', () => store.set('mugon.model', modelEl.value));
 
 function setMsg(t, err){ const m = $('customMsg'); m.textContent = t; m.classList.toggle('err', !!err); }
@@ -532,23 +533,22 @@ function setMsg(t, err){ const m = $('customMsg'); m.textContent = t; m.classLis
 async function extract(){
   const lines = $('customText').value.split(/\r?\n/).map(s=>s.trim()).filter(Boolean);
   if(lines.length !== 3){ setMsg(`エピソードは三行で書いてください（いま${lines.length}行）。`, true); return; }
-  const key = apiKeyEl.value.trim();
-  if(!key){ $('apiDetails').open = true; setMsg('Claude API キーを入力してください。', true); apiKeyEl.focus(); return; }
-  saveKey();
+  const key = claudeKey();
+  if(!key){ $('apiDetails').open = true; drawKeyState(); setMsg('Claude APIキーが未設定です。タイトルの「設定変更」で入れてください。', true); return; }
 
   const btn = $('btnExtract'); btn.disabled = true; setMsg('⏳ Claude がトーク要素を抜き出しています…');
   const system = 'あなたは日本語の品詞分析アシスタントです。与えられた三部構成のエピソードから、パーティゲームで使う「トーク要素」を抜き出し、指定のJSONのみを出力します。前置きや説明、コードブロックは書きません。';
-  const prompt = `次のエピソード（導入・展開・結論）からトーク要素を抜き出してください。
+  const prompt = `次の短いエピソード（導入・展開・結論、各1文）からトーク要素を抜き出してください。
 
 導入: ${lines[0]}
 展開: ${lines[1]}
 結論: ${lines[2]}
 
 ルール:
-- adj: 形容詞・形容動詞（3〜4個）
-- verb: 動詞（3〜4個）
-- noun: 名称（名詞・物の名前）（4〜5個）
-- conj: 接続語（接続詞・接続表現。例: だから、しかし、ところが、すると）（0〜3個。本文に無ければ空配列）
+- adj: 形容詞・形容動詞（2〜3個）
+- verb: 動詞（2〜3個）
+- noun: 名称（名詞・物の名前。身ぶりで表せる具体的な物を優先）（3〜4個）
+- conj: 接続語（接続詞・接続表現。例: だから、しかし、ところが、すると）（0〜2個。本文に無ければ空配列）
 - すべての要素は本文に書かれている文字列そのまま（部分文字列）にすること。活用形も本文どおり。
 - 同じ要素を重複させない。1要素は1〜8文字程度。
 - title: エピソードを表す12文字以内のタイトル
