@@ -140,6 +140,7 @@ $('answers').addEventListener('click', e => {
 async function end(){
   clearInterval(S.timer); S.phase = 'result';
   Kit.clearSave(ID);
+  Kit.record({ game: ID, result: S.score >= CLEAR ? 'clear' : 'fail', score: S.score, detail: `最大コンボ${S.maxCombo}・ミス${S.miss}` });
   const rec = Kit.best(ID, S.score, (a,b)=>a>b);
   $('rScore').textContent = S.score + '点';
   $('rDetail').textContent = `最大コンボ ${S.maxCombo} ／ ミス ${S.miss}${rec ? ' ／ 自己ベスト更新！' : ` ／ ベスト ${Kit.best(ID)}点`}`;

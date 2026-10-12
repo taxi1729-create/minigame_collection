@@ -120,6 +120,7 @@ $('board').addEventListener('click', async e => {
   Kit.SE.play('slide'); render();
   if(isSolved()){
     S.solved = true; pause(); render(); Kit.clearSave(ID);
+    Kit.record({ game: ID, result: 'clear', score: S.moves, detail: `${S.n}×${S.n}` });
     const rec = Kit.best(bestKey(), S.moves, (a,b)=>a<b);
     if(S.n === 3) Kit.best(ID, S.moves, (a,b)=>a<b);
     await Kit.celebrate({ title: rec ? '新記録!' : 'クリア!', sub:`${S.moves}手 ／ ${$('time').textContent}` });

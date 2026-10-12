@@ -61,8 +61,9 @@ const settings = {
   get(){ const s = store.get('settings', {}); return Object.assign({}, SETTINGS_DEFAULT, s, { keys: Object.assign({}, SETTINGS_DEFAULT.keys, s.keys||{}) }); },
   set(patch){
     const cur = settings.get();
+    const prevKeys = cur.keys;
     const next = Object.assign(cur, patch);
-    if(patch.keys) next.keys = Object.assign({}, cur.keys, patch.keys);
+    if(patch.keys) next.keys = Object.assign({}, prevKeys, patch.keys);
     store.set('settings', next);
     if('volume' in patch || 'muted' in patch) SE._apply();
     listeners.forEach(fn => { try{ fn('settings'); }catch(e){} });
@@ -85,9 +86,14 @@ function mainName(){ return DOC.profile.main || 'あなた'; }
 /* n人ぶんの名前：[基本プレイヤー, 追加プレイヤー..., 足りなければ「プレイヤーk」] */
 function players(n){
   n = n == null ? settings.get().partySize : n;
-  const list = [mainName(), ...(DOC.profile.friends||[])];
+  const seen = new Set(), list = [];
+  [mainName(), ...(DOC.profile.friends||[])].forEach(x => { if(x && !seen.has(x)){ seen.add(x); list.push(x); } });
   const out = [];
-  for(let i=0;i<n;i++) out.push(list[i] || `プレイヤー${i+1}`);
+  for(let i=0, k=1; i<n; i++){
+    let name = list[i];
+    while(!name){ const c = `プレイヤー${k++}`; if(!seen.has(c)){ seen.add(c); name = c; } }
+    out.push(name);
+  }
   return out;
 }
 

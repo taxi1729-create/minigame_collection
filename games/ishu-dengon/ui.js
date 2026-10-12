@@ -57,6 +57,7 @@ function initTitleScreen() {
 // ===== ゲーム開始 =====
 function startGame() {
   GameState.reset();
+  GameState._recorded = false;
   const { topic, category } = getRandomTopicWithCategory();
   GameState.baseTopic    = topic;
   GameState.category     = category;
@@ -409,6 +410,15 @@ function showResultScreen() {
     `${GameState.currentTopic}<br>
      <span style="font-size:0.75rem;color:#666;">元のお題：${GameState.baseTopic} ／ カテゴリ：${GameState.category}</span>`;
 
+  // 成績：全員分を同じグループで記録（再開表示・二重表示では記録しない）
+  if (!window.__ishuResuming && !GameState._recorded && window.Kit) {
+    GameState._recorded = true;
+    const group = Kit.newGroup();
+    Kit.players(GameState.playerCount).forEach(name => Kit.record({
+      game: 'ishu-dengon', player: name, result: isCorrect ? 'clear' : 'fail',
+      detail: 'お題:' + GameState.currentTopic, group,
+    }));
+  }
   if (!window.__ishuResuming) {
     if (isCorrect) Kit.celebrate({ title: '正解!', sub: GameState.currentTopic });
     else Kit.fail({ title: '不正解…', sub: '正解：' + GameState.currentTopic });

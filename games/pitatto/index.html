@@ -120,6 +120,7 @@ async function finish(){
   const rec = Kit.best(ID, Math.round(total*100)/100, (a,b)=>a<b);
   Kit.clearSave(ID);
   S.state = 'done';
+  Kit.record({ game: ID, result: total <= 1.0 ? 'clear' : 'fail', score: Math.round(total*100)/100, detail: `誤差合計${total.toFixed(2)}秒` });
   $('main').textContent = 'もう一度チャレンジ';
   if(total <= 1.0 || rec) await Kit.celebrate({ title: rec ? '新記録!' : 'クリア!', sub:`誤差合計 ${total.toFixed(2)}秒` });
   else await Kit.fail({ title:'しゅうりょう', sub:`誤差合計 ${total.toFixed(2)}秒` });

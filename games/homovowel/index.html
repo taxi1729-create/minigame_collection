@@ -39,8 +39,16 @@ const LS = {
   GH_REPO:    "hv_gh_repo",
 };
 
-function lsGet(key){ try{ return localStorage.getItem(key)||""; }catch{ return ""; } }
-function lsSet(key,val){ try{ if(val) localStorage.setItem(key,val); else localStorage.removeItem(key); }catch{} }
+function lsGetRaw(key){ try{ return localStorage.getItem(key)||""; }catch{ return ""; } }
+function lsSetRaw(key,val){ try{ if(val) localStorage.setItem(key,val); else localStorage.removeItem(key); }catch{} }
+// Gemini APIキーはあそびばこ共通設定（Kit.settings keys.gemini）を使う。
+// 旧 hv_gemini_key は共通設定が空のときだけ移行し、以後は共通設定のみ。
+(()=>{ const old=lsGetRaw(LS.GEMINI_KEY); if(old&&!Kit.settings.get().keys.gemini) Kit.settings.set({keys:{gemini:old}}); if(old) lsSetRaw(LS.GEMINI_KEY,""); })();
+function lsGet(key){ return key===LS.GEMINI_KEY ? (Kit.settings.get().keys.gemini||"") : lsGetRaw(key); }
+function lsSet(key,val){
+  if(key===LS.GEMINI_KEY){ const v=val||""; if(v!==Kit.settings.get().keys.gemini) Kit.settings.set({keys:{gemini:v}}); return; }
+  lsSetRaw(key,val);
+}
 
 // ═══════════════════════════════════════════════════════════════
 // デザイントークン
@@ -570,7 +578,8 @@ function WordListScreen({db,sha,onSave,onBack}){
 // TitleScreen
 // ═══════════════════════════════════════════════════════════════
 function TitleScreen({onStart,onWordList,onSettings,db,sha,onDbUpdate}){
-  const [players,setPlayers]=useState([{name:"プレイヤー1"}]);
+  // 初期の人数・名前はタイトル画面で決めたもの（1〜6人）
+  const [players,setPlayers]=useState(()=>Kit.players(Math.max(1,Math.min(6,Math.round(+Kit.settings.get().partySize)||1))).map(name=>({name})));
   const [rounds,setRounds]=useState(3);
   const [topicReading,setTopicReading]=useState("");
   const [generating,setGenerating]=useState(false);
@@ -580,7 +589,7 @@ function TitleScreen({onStart,onWordList,onSettings,db,sha,onDbUpdate}){
   const geminiKey=lsGet(LS.GEMINI_KEY);
   const cfg=ghConfig();
 
-  const addPlayer=()=>{if(players.length<6)setPlayers(p=>[...p,{name:`プレイヤー${p.length+1}`}]);};
+  const addPlayer=()=>{if(players.length<6)setPlayers(p=>{const c=Kit.players(p.length+1)[p.length];return [...p,{name:p.some(x=>x.name===c)?`プレイヤー${p.length+1}`:c}];});};
   const removePlayer=i=>{if(players.length>1)setPlayers(p=>p.filter((_,idx)=>idx!==i));};
   const updatePlayer=(i,v)=>setPlayers(p=>p.map((x,idx)=>idx===i?{...x,name:v}:x));
 
@@ -866,11 +875,22 @@ function GameScreen({config,onFinish,resume}){
 // ═══════════════════════════════════════════════════════════════
 // ResultScreen
 // ═══════════════════════════════════════════════════════════════
-function ResultScreen({scores,history,players,onRestart}){
+function ResultScreen({scores,history,players,config,onRestart}){
   const sorted=[...players].sort((a,b)=>(scores[b.name]||0)-(scores[a.name]||0));
   const top=scores[sorted[0].name];
   const winners=sorted.filter(p=>scores[p.name]===top);
   const medals=["🥇","🥈","🥉"];
+  // 成績：表示時に1回だけ全員分を記録（結果画面はセーブされないので再開で二重記録しない）
+  useEffect(()=>{
+    const rounds=(config&&config.rounds)||history.length||1;
+    const detail=`${rounds}ラウンド${config&&config.topic?`・お題:${config.topic.word}`:""}`;
+    const group=Kit.newGroup();
+    players.forEach(p=>{
+      const sc=scores[p.name]||0;
+      const result=players.length===1 ? (sc*2>rounds?"clear":"fail") : (sc===top?"win":"lose");
+      Kit.record({game:HV_ID,player:p.name,result,score:sc,detail,group});
+    });
+  },[]);
   useEffect(()=>{ Kit.celebrate({title:winners.length===1?"優勝!":"引き分け!",sub:`${winners.map(w=>w.name).join("・")} ${top}点`}); },[]);
   return <div style={{minHeight:"100vh",background:"transparent",padding:"32px 16px"}}>
     <div style={{maxWidth:"640px",margin:"0 auto"}} className="fu">
@@ -952,7 +972,7 @@ function App(){
   if(screen==="wordlist") return <WordListScreen db={db} sha={sha} onSave={handleWordListSave} onBack={()=>setScreen("title")}/>;
   if(screen==="title")    return <TitleScreen onStart={handleStart} onWordList={()=>setScreen("wordlist")} onSettings={()=>setScreen("settings")} db={db} sha={sha} onDbUpdate={handleDbUpdate}/>;
   if(screen==="game")     return <GameScreen config={gameConfig} onFinish={handleFinish} resume={saved.current&&saved.current.game}/>;
-  if(screen==="result")   return <ResultScreen scores={finalScores} history={finalHistory} players={gameConfig.players} onRestart={handleRestart}/>;
+  if(screen==="result")   return <ResultScreen scores={finalScores} history={finalHistory} players={gameConfig.players} config={gameConfig} onRestart={handleRestart}/>;
   return null;
 }
 

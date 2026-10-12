@@ -189,8 +189,9 @@ const GENRES = ['おまかせ', ...Object.keys(TOPICS)];
 const $ = id => document.getElementById(id);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 
+const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, Math.round(+v) || lo));
 const fresh = () => ({
-  phase:'setup', players:['プレイヤー1','プレイヤー2','プレイヤー3'], genre:'おまかせ', laps:1, think:40,
+  phase:'setup', players:Kit.players(clamp(Kit.settings.get().partySize, 3, 8)), genre:'おまかせ', laps:1, think:40,
   scores:[], turn:0, topic:null, topicGenre:'', hint:'', correct:[], used:[], changed:false, lastGain:null,
 });
 let S = fresh();
@@ -198,7 +199,8 @@ const saved = Kit.load(ID);
 if(saved && saved.phase){ S = Object.assign(fresh(), saved); }
 
 Kit.mount({ id: ID, title: 'あいまいアンサー', onSave: () => {
-  if(S.phase === 'final') return null;
+  // 設定画面・最終結果は途中セーブしない（次に開いたときタイトルで決めた人数・名前を使うため）
+  if(S.phase === 'final' || S.phase === 'setup') return null;
   const snap = JSON.parse(JSON.stringify(S));
   snap.hint = $('hintIn').value || S.hint;
   return snap;
@@ -217,7 +219,10 @@ function drawPlayers(){
 }
 $('plist').addEventListener('input', e => { if(e.target.dataset.i != null && e.target.tagName === 'INPUT') S.players[+e.target.dataset.i] = e.target.value; });
 $('plist').addEventListener('click', e => { const b = e.target.closest('.del'); if(!b) return; S.players.splice(+b.dataset.i,1); drawPlayers(); });
-$('addP').addEventListener('click', () => { S.players.push(`プレイヤー${S.players.length+1}`); drawPlayers(); });
+$('addP').addEventListener('click', () => {
+  const n = S.players.length, cand = Kit.players(n+1)[n];
+  S.players.push(S.players.includes(cand) ? `プレイヤー${n+1}` : cand); drawPlayers();
+});
 function seg(el, key, cast){
   el.addEventListener('click', e => {
     const b = e.target.closest('button'); if(!b) return;
@@ -360,6 +365,10 @@ async function toFinal(){
   $('fWin').textContent = wins.join('・');
   $('fBoard').innerHTML = boardHtml(true);
   Kit.screen('sFinal'); Kit.clearSave(ID);
+  // 成績：全員分を同じグループで記録（最高点は全員 win）
+  const group = Kit.newGroup();
+  S.players.forEach((p,i) => Kit.record({ game: ID, player: p, result: S.scores[i] === top ? 'win' : 'lose',
+    score: S.scores[i], detail: `${S.players.length}人・${total()}ラウンド`, group }));
   await Kit.celebrate({ title:'優勝!', sub:`${wins.join('・')}（${top}点）`, ms:2800 });
 }
 $('btnSame').addEventListener('click', () => { S.scores = S.players.map(()=>0); S.turn = 0; S.used = []; Kit.SE.play('start'); toPass(); });

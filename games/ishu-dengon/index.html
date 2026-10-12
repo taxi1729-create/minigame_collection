@@ -65,7 +65,7 @@
         <input type="password" id="claudeKeyInput" class="api-key-input"
           placeholder="sk-ant-..." autocomplete="off">
         <p class="api-key-hint">
-          キーはこの端末にだけ保存されます。未入力でもAI以外のアクションで遊べます。
+          キーはこの端末にだけ保存され、あそびばこ共通の設定と共有されます。未入力でもAI以外のアクションで遊べます。
         </p>
       </div>
     </div>
@@ -125,11 +125,22 @@ document.addEventListener('DOMContentLoaded', () => {
 
   initTitleScreen();
 
-  // APIキーは端末に保存して次回も使う
+  // 人数の初期値はタイトル画面で決めた人数（2〜7人に収める）。再開時は下でセーブ側が上書き
+  const party = Math.max(2, Math.min(7, Math.round(+Kit.settings.get().partySize) || 3));
+  GameState.playerCount = party;
+  document.querySelectorAll('#playerCount .toggle-btn').forEach(b => b.classList.toggle('active', +b.dataset.value === party));
+
+  // APIキーは共通設定（Kit.settings keys.claude）。旧 ishu.claudeKey は共通設定が空のときだけ移行
   const keyIn = document.getElementById('claudeKeyInput');
-  const savedKey = Kit.store.get(KEY_STORE, '');
-  if (savedKey) { keyIn.value = savedKey; GameState.claudeApiKey = savedKey; }
-  keyIn.addEventListener('change', () => Kit.store.set(KEY_STORE, keyIn.value.trim()));
+  const oldKey = Kit.store.get(KEY_STORE, '');
+  if (oldKey && !Kit.settings.get().keys.claude) Kit.settings.set({ keys: { claude: oldKey } });
+  if (oldKey) Kit.store.del(KEY_STORE);
+  const sharedKey = Kit.settings.get().keys.claude || '';
+  keyIn.value = sharedKey; GameState.claudeApiKey = sharedKey;
+  keyIn.addEventListener('change', () => {
+    const k = keyIn.value.trim(); GameState.claudeApiKey = k;
+    if (k !== Kit.settings.get().keys.claude) Kit.settings.set({ keys: { claude: k } });
+  });
 
   document.getElementById('replayBtn').addEventListener('click', () => { Kit.clearSave(ID); showScreen('titleScreen'); });
   document.getElementById('continueBtn').addEventListener('click', () => { SoundManager.init(); startGame(); });

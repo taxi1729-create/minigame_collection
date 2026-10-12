@@ -1,0 +1,37 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <title>あそびばこ</title>
+  <defs>
+    <clipPath id="sq"><rect width="512" height="512" rx="112"/></clipPath>
+  </defs>
+  <g clip-path="url(#sq)">
+    <rect width="512" height="512" fill="#ffd23f"/>
+    <!-- 放射線 -->
+    <g fill="#ffe27f">
+      <path d="M256 300 L-40 120 L-40 230Z"/><path d="M256 300 L60 -40 L170 -40Z"/>
+      <path d="M256 300 L330 -40 L440 -40Z"/><path d="M256 300 L560 90 L560 200Z"/>
+      <path d="M256 300 L560 380 L560 490Z"/><path d="M256 300 L-40 400 L-40 510Z"/>
+    </g>
+    <g id="art" stroke="#1d2440" stroke-width="14" stroke-linejoin="round" stroke-linecap="round">
+      <!-- 奥のふた -->
+      <path d="M150 236 L176 150 L336 150 L362 236Z" fill="#e3c69c"/>
+      <!-- 箱の内側 -->
+      <path d="M118 276 L150 236 L362 236 L394 276Z" fill="#7a5a38"/>
+      <!-- 中から覗くもの -->
+      <circle cx="206" cy="214" r="62" fill="#ff4fa3"/>
+      <path d="M186 186 a26 26 0 0 1 30 -10" stroke="#fffdf7" stroke-width="12" fill="none"/>
+      <path d="M318 122 L334 164 L378 166 L344 194 L356 238 L318 212 L280 238 L292 194 L258 166 L302 164Z" fill="#00a3a1"/>
+      <!-- 影 -->
+      <path d="M132 290 L408 290 L408 444 Q408 458 394 458 L146 458 Q132 458 132 444Z" fill="#1d2440" stroke="none"/>
+      <!-- 箱の前面 -->
+      <path d="M118 276 L394 276 L394 430 Q394 444 380 444 L132 444 Q118 444 118 430Z" fill="#d6b58a"/>
+      <!-- 左右のふた -->
+      <path d="M118 276 L150 236 L84 176 L46 226Z" fill="#c9a576"/>
+      <path d="M394 276 L362 236 L428 176 L466 226Z" fill="#c9a576"/>
+      <!-- 紙ラベル -->
+      <rect x="176" y="318" width="160" height="86" rx="12" fill="#fffdf7" stroke-width="10"/>
+      <circle cx="214" cy="361" r="14" fill="#ff4fa3" stroke-width="7"/>
+      <path d="M256 347 L272 375 L240 375Z" fill="#00a3a1" stroke-width="7"/>
+      <rect x="284" y="347" width="28" height="28" rx="5" fill="#3a6fe0" stroke-width="7"/>
+    </g>
+  </g>
+</svg>

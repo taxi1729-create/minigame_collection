@@ -144,7 +144,7 @@ footer{text-align:center;font-size:12px;color:var(--ink2);margin-top:24px}
         <summary>🔑 Claude API 設定</summary>
         <label class="lbl" for="apiKey">API キー</label>
         <input type="password" id="apiKey" autocomplete="off" placeholder="sk-ant-...">
-        <label class="row hint" style="gap:6px;margin-top:6px"><input type="checkbox" id="saveKey"> このブラウザにキーを保存する（共有端末ではオフ推奨）</label>
+        <p class="hint">キーはこの端末だけに保存され、あそびばこの共通設定（Claude API キー）と共有されます。</p>
         <label class="lbl" for="apiModel">モデル</label>
         <select id="apiModel">
           <option value="claude-haiku-4-5-20251001">Claude Haiku 4.5（速い・安い）</option>
@@ -215,6 +215,7 @@ footer{text-align:center;font-size:12px;color:var(--ink2);margin-top:24px}
   <section class="panel" id="logPanel" aria-labelledby="lgTag">
     <span class="panel-tag" id="lgTag">点数ログ</span>
     <label class="lbl" for="playerName" style="margin-top:6px">今回話す人の名前</label>
+    <div class="k-seg" id="nameChips" role="group" aria-label="話す人を選ぶ" style="margin-bottom:8px"></div>
     <input type="text" id="playerName" maxlength="20" placeholder="例）こじま">
     <p class="hint">ログに残った名前はあとから書き換えられます。</p>
     <ol class="log-list" id="logList"></ol>
@@ -443,6 +444,7 @@ function finish(){
   $('rankText').textContent = rank(avg);
   renderAll();
   Kit.clearSave(ID);
+  Kit.record({ game: ID, player: name, result: avg >= 50 ? 'clear' : 'fail', score: avg, detail: S.episode.title });
   if(avg >= 50) Kit.celebrate({ title: avg >= 90 ? '以心伝心!' : '伝わった!', sub: `${name} ${avg}点` });
   else Kit.fail({ title: avg >= 30 ? 'なんとなく…' : '伝わらず', sub: `${name} ${avg}点` });
 }
@@ -511,13 +513,18 @@ function renderLog(){
 function renderAll(){ renderEpisode(); renderElements(); renderControls(); renderLog(); }
 
 // ---------- custom episode via Claude API ----------
-const apiKeyEl = $('apiKey'), saveKeyEl = $('saveKey'), modelEl = $('apiModel');
-const savedKey = store.get('mugon.apikey', '');
-if(savedKey){ apiKeyEl.value = savedKey; saveKeyEl.checked = true; }
+const apiKeyEl = $('apiKey'), modelEl = $('apiModel');
+// APIキーは共通設定（Kit.settings keys.claude）を使う。旧 mugon.apikey は共通設定が空のときだけ移行
+(() => {
+  const old = store.get('mugon.apikey', '');
+  if(old && !Kit.settings.get().keys.claude) Kit.settings.set({ keys:{ claude: old } });
+  if(old) store.del('mugon.apikey');
+})();
+const saveKey = () => { const k = apiKeyEl.value.trim(); if(k !== Kit.settings.get().keys.claude) Kit.settings.set({ keys:{ claude: k } }); };
+apiKeyEl.value = Kit.settings.get().keys.claude || '';
 modelEl.value = store.get('mugon.model', modelEl.value) || modelEl.value;
 if(!modelEl.value) modelEl.selectedIndex = 0;
-saveKeyEl.addEventListener('change', () => { if(saveKeyEl.checked) store.set('mugon.apikey', apiKeyEl.value.trim()); else store.del('mugon.apikey'); });
-apiKeyEl.addEventListener('change', () => { if(saveKeyEl.checked) store.set('mugon.apikey', apiKeyEl.value.trim()); });
+apiKeyEl.addEventListener('change', saveKey);
 modelEl.addEventListener('change', () => store.set('mugon.model', modelEl.value));
 
 function setMsg(t, err){ const m = $('customMsg'); m.textContent = t; m.classList.toggle('err', !!err); }
@@ -527,7 +534,7 @@ async function extract(){
   if(lines.length !== 3){ setMsg(`エピソードは三行で書いてください（いま${lines.length}行）。`, true); return; }
   const key = apiKeyEl.value.trim();
   if(!key){ $('apiDetails').open = true; setMsg('Claude API キーを入力してください。', true); apiKeyEl.focus(); return; }
-  if(saveKeyEl.checked) store.set('mugon.apikey', key);
+  saveKey();
 
   const btn = $('btnExtract'); btn.disabled = true; setMsg('⏳ Claude がトーク要素を抜き出しています…');
   const system = 'あなたは日本語の品詞分析アシスタントです。与えられた三部構成のエピソードから、パーティゲームで使う「トーク要素」を抜き出し、指定のJSONのみを出力します。前置きや説明、コードブロックは書きません。';
@@ -609,8 +616,18 @@ $('btnClearLog').addEventListener('click', async () => {
   if(!S.log.length || !await Kit.confirm('点数ログをすべて消去しますか？', {ok:'消去', danger:true})) return;
   S.log = []; store.set('mugon.log', S.log); renderLog();
 });
-$('playerName').value = store.get('mugon.name', '');
-$('playerName').addEventListener('change', e => store.set('mugon.name', e.target.value.trim()));
+// 話す人：初期値は基本プレイヤー名。上のチップ（タイトルで決めた人数ぶん）からも選べる
+function renderNameChips(){
+  const cur = ($('playerName').value || '').trim();
+  $('nameChips').innerHTML = Kit.players(Math.max(2, Kit.settings.get().partySize || 2))
+    .map(n => `<button type="button" data-se="select" data-n="${esc(n)}" aria-pressed="${n === cur}">${esc(n)}</button>`).join('');
+}
+$('playerName').value = Kit.mainName();
+$('playerName').addEventListener('input', renderNameChips);
+$('nameChips').addEventListener('click', e => {
+  const b = e.target.closest('button'); if(!b) return;
+  $('playerName').value = b.dataset.n; renderNameChips();
+});
 
 
 
@@ -625,6 +642,9 @@ if(saved && saved.episode){
   Object.assign(S, { episode:saved.episode, selected:saved.selected||[], phase:saved.phase||'idle', remaining:saved.remaining ?? TIME_LIMIT,
     scores:saved.scores||[0,0,0], hideText:!!saved.hideText, lastId:saved.lastId });
   if(saved.name) $('playerName').value = saved.name;
+}
+renderNameChips();
+if(saved && saved.episode){
   Kit.toast(S.phase === 'paused' ? '一時停止中から再開できます' : 'つづきから再開します');
 }
 renderAll();
