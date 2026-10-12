@@ -76,6 +76,7 @@ const SoundManager = {
   context: null, gainNode: null,
 
   init() {
+    if (this.context) { if (this.context.state === 'suspended') this.context.resume(); this.setVolume(); return; }
     try {
       this.context = new (window.AudioContext || window.webkitAudioContext)();
       this.gainNode = this.context.createGain();
@@ -84,14 +85,18 @@ const SoundManager = {
     } catch(e) { console.warn('Web Audio API not supported'); }
   },
 
-  setVolume(vol) {
+  setVolume() { // 音量はタイトルの設定に従う
+    const s = window.Kit ? Kit.settings.get() : { volume: GameState.volume, muted: false };
+    const vol = s.muted ? 0 : s.volume;
     GameState.volume = vol;
     if (this.gainNode) this.gainNode.gain.value = vol;
   },
 
   playBeep(freq = 440, duration = 0.15, type = 'sine') {
     if (!this.context) this.init();
-    if (!this.context || (window.Kit && Kit.SE.muted)) return;
+    if (!this.context) return;
+    this.setVolume();
+    if (!GameState.volume) return;
     try {
       if (this.context.state === 'suspended') this.context.resume();
       const osc = this.context.createOscillator();

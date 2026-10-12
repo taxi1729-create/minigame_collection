@@ -462,7 +462,7 @@ window.addEventListener('hashchange', () => { const i = TABS.findIndex(t => '#'+
 /* スワイプ：横移動が十分で、縦より大きいときだけ切替 */
 (() => {
   let sx=0, sy=0, st=0, dx=0, id=null, mode=null, suppress=false;
-  const NOSWIPE = 'input, textarea, select, [contenteditable], .no-swipe';
+  const NOSWIPE = 'input, textarea, select, [contenteditable], .no-swipe, .ticks, #pticks';
   pager.addEventListener('pointerdown', e => {
     if(id !== null || (e.pointerType === 'mouse' && e.button !== 0)) return;
     if(e.target.closest(NOSWIPE)) return;
@@ -514,7 +514,12 @@ window.addEventListener('hashchange', () => { const i = TABS.findIndex(t => '#'+
 function bestOf(id){
   const b = Kit.best(id);
   if(b == null) return '';
-  const label = {pitatto: v => `ベスト 誤差${Number(v).toFixed(2)}秒`, irokotoba: v => `ベスト ${v}点`, 'slide-puzzle': v => `ベスト ${v}手`}[id];
+  if(id === 'slide-puzzle'){
+    const b3 = Kit.best('slide-puzzle.3') ?? b, b4 = Kit.best('slide-puzzle.4');
+    return [b3 != null ? `3×3 ${b3}手` : '', b4 != null ? `4×4 ${b4}手` : ''].filter(Boolean)
+      .map(t => `<span class="k-chip k-chip--yellow">ベスト ${t}</span>`).join('');
+  }
+  const label = {pitatto: v => `ベスト 誤差${Number(v).toFixed(2)}秒`, irokotoba: v => `ベスト ${v}点`}[id];
   return label ? `<span class="k-chip k-chip--yellow">${label(b)}</span>` : '';
 }
 function ticket(g, n){
@@ -564,8 +569,7 @@ function drawRange(){
 }
 function setFriend(idx, val){ // idx: friends 配列の位置
   const f = Kit.profile.get().friends;
-  while(f.length < idx) f.push(`プレイヤー${f.length+2}`);
-  f[idx] = val;
+  if(idx < f.length) f[idx] = val; else if(String(val).trim()) f.push(val); // 間を空けずに詰めて登録
   Kit.profile.set({friends:f});
 }
 function renderNames(){
@@ -931,9 +935,15 @@ function drawSnd(){ snd.innerHTML = Kit.SE.muted ? Kit.ICON.off : Kit.ICON.on; s
 snd.addEventListener('click', () => { Kit.SE.setMuted(!Kit.SE.muted); drawSnd(); drawSound(); Kit.SE.play('pop'); Kit.toast(Kit.SE.muted ? '効果音オフ' : '効果音オン', 900); });
 
 function renderAll(){
+  // 名前などを入力中は描き直さない（入力が消えるのを防ぐ）
+  const a = document.activeElement;
+  if(a && a.matches && a.matches('input[type=text], input:not([type]), input[type=password], textarea')){ pendingRender = true; return; }
+  pendingRender = false;
   drawSnd(); drawSound(); drawRange(); renderNames(); renderPartyShelves(); renderSolo();
   fillMain(); renderFriends(); renderCloud(); renderStats();
 }
+let pendingRender = false;
+document.addEventListener('focusout', () => setTimeout(() => { if(pendingRender) renderAll(); }, 0));
 Kit.onChange(r => { if(r === 'sync' || r === 'import') renderAll(); });
 
 renderAll();

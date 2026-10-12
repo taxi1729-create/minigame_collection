@@ -887,7 +887,7 @@ function ResultScreen({scores,history,players,config,onRestart}){
     const group=Kit.newGroup();
     players.forEach(p=>{
       const sc=scores[p.name]||0;
-      const result=players.length===1 ? (sc*2>rounds?"clear":"fail") : (sc===top?"win":"lose");
+      const result=players.length===1 ? (sc*2>rounds?"clear":"fail") : (winners.length===players.length?"play":(sc===top?"win":"lose"));
       Kit.record({game:HV_ID,player:p.name,result,score:sc,detail,group});
     });
   },[]);

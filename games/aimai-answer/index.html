@@ -367,7 +367,8 @@ async function toFinal(){
   Kit.screen('sFinal'); Kit.clearSave(ID);
   // 成績：全員分を同じグループで記録（最高点は全員 win）
   const group = Kit.newGroup();
-  S.players.forEach((p,i) => Kit.record({ game: ID, player: p, result: S.scores[i] === top ? 'win' : 'lose',
+  const draw = wins.length === S.players.length; // 全員同点は引き分け
+  S.players.forEach((p,i) => Kit.record({ game: ID, player: p, result: draw ? 'play' : S.scores[i] === top ? 'win' : 'lose',
     score: S.scores[i], detail: `${S.players.length}人・${total()}ラウンド`, group }));
   await Kit.celebrate({ title:'優勝!', sub:`${wins.join('・')}（${top}点）`, ms:2800 });
 }

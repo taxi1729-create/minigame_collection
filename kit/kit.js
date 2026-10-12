@@ -27,7 +27,7 @@ const store = {
 const DOC_KEY = 'doc';
 const now = () => Date.now();
 const uid = () => now().toString(36) + Math.random().toString(36).slice(2, 8);
-function emptyDoc(){ return { v:1, profile:{ main:'', friends:[], at:0 }, saves:{}, best:{}, records:[] }; }
+function emptyDoc(){ return { v:1, profile:{ main:'', friends:[], at:0 }, saves:{}, best:{}, records:[], deleted:{} }; }
 function loadDoc(){
   let d = store.get(DOC_KEY, null);
   if(!d){
@@ -89,9 +89,9 @@ function players(n){
   const seen = new Set(), list = [];
   [mainName(), ...(DOC.profile.friends||[])].forEach(x => { if(x && !seen.has(x)){ seen.add(x); list.push(x); } });
   const out = [];
-  for(let i=0, k=1; i<n; i++){
+  for(let i=0; i<n; i++){
     let name = list[i];
-    while(!name){ const c = `プレイヤー${k++}`; if(!seen.has(c)){ seen.add(c); name = c; } }
+    for(let k=i+1; !name; k++){ const c = `プレイヤー${k}`; if(!seen.has(c)){ seen.add(c); name = c; } }
     out.push(name);
   }
   return out;
@@ -101,8 +101,9 @@ function players(n){
 // result: 'win' | 'lose' | 'clear' | 'fail' | 'play'
 function record(r){
   if(!r || !r.game) return null;
-  const rec = { id: uid(), at: now(), game: r.game, player: String(r.player || mainName()).slice(0, 12),
-    result: r.result || 'play' };
+  const who = String(r.player || mainName()).slice(0, 12);
+  const rec = { id: uid(), at: now(), game: r.game, player: who, result: r.result || 'play' };
+  if(who === mainName()) rec.me = true; // 基本プレイヤーの記録（名前を後で変えても自分の成績として扱う）
   if(r.score != null && isFinite(r.score)) rec.score = Number(r.score);
   if(r.detail) rec.detail = String(r.detail).slice(0, 80);
   if(r.group) rec.group = String(r.group).slice(0, 40); // 同じ対戦の記録を束ねるID
@@ -111,10 +112,16 @@ function record(r){
   commit('record');
   return rec;
 }
+// 基本プレイヤーの記録は、いまの基本プレイヤー名で返す
+const view = r => r.me ? Object.assign({}, r, { player: mainName() }) : r;
 function records(filter={}){
-  return DOC.records.filter(r => (!filter.game || r.game === filter.game) && (!filter.player || r.player === filter.player));
+  return DOC.records.map(view).filter(r => (!filter.game || r.game === filter.game) && (!filter.player || r.player === filter.player));
 }
-function deleteRecords(pred){ const before = DOC.records.length; DOC.records = DOC.records.filter(r => !pred(r)); if(DOC.records.length !== before) commit('record'); }
+function deleteRecords(pred){
+  const t = now(); let n = 0;
+  DOC.records = DOC.records.filter(r => { if(pred(view(r))){ DOC.deleted[r.id] = t; n++; return false; } return true; });
+  if(n) commit('record');
+}
 function newGroup(){ return uid(); }
 
 /* ---------- 効果音（Web Audio で合成、音源ファイル不要） ---------- */
@@ -213,13 +220,14 @@ function mergeDocs(a, b){
   const keys = (x, y) => new Set([...Object.keys(x||{}), ...Object.keys(y||{})]);
   keys(a.saves, b.saves).forEach(k => { const x = a.saves[k], y = (b.saves||{})[k]; out.saves[k] = !y ? x : !x ? y : (y.at > x.at ? y : x); });
   keys(a.best, b.best).forEach(k => { const x = a.best[k], y = (b.best||{})[k]; out.best[k] = !y ? x : !x ? y : (y.at > x.at ? y : x); });
+  out.deleted = Object.assign({}, b.deleted||{}, a.deleted||{});
   const seen = new Map();
-  [...(a.records||[]), ...(b.records||[])].forEach(r => { if(r && r.id && !seen.has(r.id)) seen.set(r.id, r); });
+  [...(a.records||[]), ...(b.records||[])].forEach(r => { if(r && r.id && !seen.has(r.id) && !out.deleted[r.id]) seen.set(r.id, r); });
   out.records = [...seen.values()].sort((p, q) => p.at - q.at).slice(-3000);
   return out;
 }
 const Cloud = (() => {
-  let timer = 0, busy = false;
+  let timer = 0, busy = false, again = false;
   const cfg = () => store.get('cloud', { provider: 'none', token: '', gistId: '', lastSync: 0, lastError: '' });
   const setCfg = p => store.set('cloud', Object.assign(cfg(), p));
   async function gh(path, opt={}){
@@ -244,7 +252,8 @@ const Cloud = (() => {
   }
   async function sync(){
     const c = cfg();
-    if(c.provider !== 'gist' || !c.token || busy) return { ok: false, skipped: true };
+    if(c.provider !== 'gist' || !c.token) return { ok: false, skipped: true };
+    if(busy){ again = true; return { ok: false, skipped: true }; }
     busy = true; emit('syncing');
     try{
       const id = await findOrCreate();
@@ -263,7 +272,7 @@ const Cloud = (() => {
       emit('ok'); return { ok: true };
     }catch(e){
       setCfg({ lastError: e.message || String(e) }); emit('error'); return { ok: false, error: e.message || String(e) };
-    }finally{ busy = false; }
+    }finally{ busy = false; if(again){ again = false; setTimeout(sync, 300); } }
   }
   const subs = new Set();
   function emit(s){ subs.forEach(fn => { try{ fn(s); }catch(e){} }); }
