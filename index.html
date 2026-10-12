@@ -911,7 +911,7 @@ function openSheet(id, solo=false){
   how.style.setProperty('--sc', getComputedStyle(document.querySelector(`.ticket[data-id="${id}"] .ticket__stub`)).backgroundColor);
   how.innerHTML = g.how.map(h => `<li>${esc(h)}</li>`).join('');
   const who = $('sheetWho');
-  if(soloRun){ who.hidden = false; who.textContent = `1人で遊ぶ：${Kit.mainName()}`; }
+  if(soloRun){ who.hidden = false; who.textContent = `1人で遊ぶ：${Kit.mainName()}` + (sv ? '（「つづきから」は中断したときの人数で再開）' : ''); }
   else if(g.group === 'party'){
     who.hidden = false;
     who.textContent = n < g.min ? `いまの設定は${n}人。このゲームは${g.min}人からです（ゲーム内でも変えられます）`

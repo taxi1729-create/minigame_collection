@@ -411,8 +411,11 @@ async function fetchGemini(key, nQ, exclude, signal){
   try{
     const data = await post('https://generativelanguage.googleapis.com/v1beta/interactions', headers,
       { model: GEMINI_MODEL, system_instruction: system, input: prompt, tools: [{ type:'google_search' }] }, signal);
-    if(data.status && data.status !== 'completed' && Array.isArray(data.errors) && data.errors.length)
-      throw new NewsError('APIでエラーが起きました', data.errors.map(e => e.message).join(' / '));
+    if(data.status && data.status !== 'completed'){
+      const why = Array.isArray(data.errors) && data.errors.length ? data.errors.map(e => e.message).join(' / ') : `状態：${data.status}`;
+      if(['failed','cancelled','incomplete'].includes(data.status) || (Array.isArray(data.errors) && data.errors.length))
+        throw new NewsError('AIの生成が途中で止まりました。もう一度お試しください', why);
+    }
     const steps = Array.isArray(data.steps) ? data.steps : Array.isArray(data.outputs) ? data.outputs : [];
     steps.filter(s => s && (s.type === 'model_output' || s.type === 'text' || !s.type)).forEach(s => {
       const cs = Array.isArray(s.content) ? s.content : (s.type === 'text' ? [s] : []);
@@ -461,7 +464,7 @@ function normalize(json, searchUrls, existing){
     const k = normH(h);
     if(seen.has(k) || seenUrl.has(url)) return;
     const t = Date.parse(r.published || r.date || '');
-    if(isFinite(t) && now - t > 2*DAY) return; // 古すぎる記事は外す
+    if(isFinite(t) && now - t > 30*60*60*1000) return; // 24時間（＋時差の余裕6時間）より古い記事は外す
     const it = { id: uid(), h, s, cat: catOf(r.category), src: str(r.source, 30) || host(url), url, at: isFinite(t) ? new Date(t).toISOString() : '' };
     seen.add(k); seenUrl.add(url);
     if(hosts.size && !hosts.has(host(url))) offHost.push(it); else reals.push(it);
