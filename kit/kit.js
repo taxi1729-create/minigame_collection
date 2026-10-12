@@ -6,22 +6,121 @@
 'use strict';
 const NS = 'asobibako';
 
-/* ---------- storage ---------- */
+/* ---------- storage（端末内のキー値。APIキーなど同期しないもの） ---------- */
 const store = {
   get(k, d){ try{ const v = localStorage.getItem(NS+'.'+k); return v == null ? d : JSON.parse(v); }catch(e){ return d; } },
   set(k, v){ try{ localStorage.setItem(NS+'.'+k, JSON.stringify(v)); return true; }catch(e){ return false; } },
   del(k){ try{ localStorage.removeItem(NS+'.'+k); }catch(e){} },
 };
 
+/* =========================================================
+   セーブデータ本体（1つのJSONドキュメント）
+   端末に保存し、クラウド接続時は同じ内容を同期する。
+   doc = {
+     v: 1,
+     profile: { main, friends:[...], at },          // 基本プレイヤー名と追加プレイヤー名
+     saves:   { <gameId>: { at, data|null } },       // 途中セーブ（null は削除済み）
+     best:    { <key>: { at, v } },                  // 自己ベスト
+     records: [ { id, at, game, player, result, score?, detail?, group? } ],  // 成績
+   }
+   ========================================================= */
+const DOC_KEY = 'doc';
+const now = () => Date.now();
+const uid = () => now().toString(36) + Math.random().toString(36).slice(2, 8);
+function emptyDoc(){ return { v:1, profile:{ main:'', friends:[], at:0 }, saves:{}, best:{}, records:[] }; }
+function loadDoc(){
+  let d = store.get(DOC_KEY, null);
+  if(!d){
+    d = emptyDoc();
+    // 旧形式（asobibako.save.* / best.*）から移行
+    try{
+      for(let i=0;i<localStorage.length;i++){
+        const k = localStorage.key(i); if(!k || !k.startsWith(NS+'.')) continue;
+        const sub = k.slice(NS.length+1);
+        if(sub.startsWith('save.')){ const v = store.get(sub, null); if(v) d.saves[sub.slice(5)] = { at: v.at||now(), data: v.data }; }
+        if(sub.startsWith('best.')){ const v = store.get(sub, null); if(v != null) d.best[sub.slice(5)] = { at: now(), v }; }
+      }
+    }catch(e){}
+    store.set(DOC_KEY, d);
+  }
+  return Object.assign(emptyDoc(), d);
+}
+let DOC = loadDoc();
+const listeners = new Set();
+function commit(reason){
+  const ok = store.set(DOC_KEY, DOC);
+  listeners.forEach(fn => { try{ fn(reason); }catch(e){} });
+  Cloud._dirty();
+  return ok;
+}
+function onChange(fn){ listeners.add(fn); return () => listeners.delete(fn); }
+
+/* ---------- 設定（端末ごと。同期しない） ---------- */
+const SETTINGS_DEFAULT = { volume: 0.7, muted: false, partySize: 3, keys: { claude:'', gemini:'' } };
+const settings = {
+  get(){ const s = store.get('settings', {}); return Object.assign({}, SETTINGS_DEFAULT, s, { keys: Object.assign({}, SETTINGS_DEFAULT.keys, s.keys||{}) }); },
+  set(patch){
+    const cur = settings.get();
+    const next = Object.assign(cur, patch);
+    if(patch.keys) next.keys = Object.assign({}, cur.keys, patch.keys);
+    store.set('settings', next);
+    if('volume' in patch || 'muted' in patch) SE._apply();
+    listeners.forEach(fn => { try{ fn('settings'); }catch(e){} });
+    return next;
+  },
+};
+// 旧ミュート設定の移行
+if(store.get('mute', null) != null){ const s = store.get('settings', {}); if(s.muted == null){ s.muted = !!store.get('mute', false); store.set('settings', s); } store.del('mute'); }
+
+/* ---------- プレイヤー ---------- */
+const profile = {
+  get(){ return { main: DOC.profile.main || '', friends: (DOC.profile.friends||[]).slice() }; },
+  set({main, friends}){
+    if(main != null) DOC.profile.main = String(main).trim().slice(0, 12);
+    if(friends != null) DOC.profile.friends = friends.map(s => String(s).trim().slice(0, 12)).filter(Boolean).slice(0, 20);
+    DOC.profile.at = now(); commit('profile');
+  },
+};
+function mainName(){ return DOC.profile.main || 'あなた'; }
+/* n人ぶんの名前：[基本プレイヤー, 追加プレイヤー..., 足りなければ「プレイヤーk」] */
+function players(n){
+  n = n == null ? settings.get().partySize : n;
+  const list = [mainName(), ...(DOC.profile.friends||[])];
+  const out = [];
+  for(let i=0;i<n;i++) out.push(list[i] || `プレイヤー${i+1}`);
+  return out;
+}
+
+/* ---------- 成績 ---------- */
+// result: 'win' | 'lose' | 'clear' | 'fail' | 'play'
+function record(r){
+  if(!r || !r.game) return null;
+  const rec = { id: uid(), at: now(), game: r.game, player: String(r.player || mainName()).slice(0, 12),
+    result: r.result || 'play' };
+  if(r.score != null && isFinite(r.score)) rec.score = Number(r.score);
+  if(r.detail) rec.detail = String(r.detail).slice(0, 80);
+  if(r.group) rec.group = String(r.group).slice(0, 40); // 同じ対戦の記録を束ねるID
+  DOC.records.push(rec);
+  if(DOC.records.length > 3000) DOC.records = DOC.records.slice(-3000);
+  commit('record');
+  return rec;
+}
+function records(filter={}){
+  return DOC.records.filter(r => (!filter.game || r.game === filter.game) && (!filter.player || r.player === filter.player));
+}
+function deleteRecords(pred){ const before = DOC.records.length; DOC.records = DOC.records.filter(r => !pred(r)); if(DOC.records.length !== before) commit('record'); }
+function newGroup(){ return uid(); }
+
 /* ---------- 効果音（Web Audio で合成、音源ファイル不要） ---------- */
 const SE = (() => {
   let ctx = null, master = null;
-  let muted = store.get('mute', false);
+  let muted = !!settings.get().muted;
+  function vol(){ const s = settings.get(); return s.muted ? 0 : Math.max(0, Math.min(1, s.volume)); }
   function ensure(){
     if(!ctx){
       try{
         ctx = new (window.AudioContext || window.webkitAudioContext)();
-        master = ctx.createGain(); master.gain.value = 0.5; master.connect(ctx.destination);
+        master = ctx.createGain(); master.gain.value = vol(); master.connect(ctx.destination);
       }catch(e){ return null; }
     }
     if(ctx.state === 'suspended') ctx.resume();
@@ -69,23 +168,115 @@ const SE = (() => {
     buzz(){ tone(150,0,.5,{type:'sawtooth',vol:.2}); },
   };
   return {
-    play(name){ try{ (lib[name]||lib.click)(); }catch(e){} },
+    play(name){ try{ if(!vol()) return; (lib[name]||lib.click)(); }catch(e){} },
     unlock(){ ensure(); },
     get muted(){ return muted; },
-    setMuted(v){ muted = !!v; store.set('mute', muted); },
+    setMuted(v){ settings.set({ muted: !!v }); },
+    _apply(){ muted = !!settings.get().muted; if(master) master.gain.value = vol(); },
   };
 })();
 
-/* ---------- セーブ ---------- */
-function save(id, data){ return store.set('save.'+id, {at: Date.now(), data}); }
-function load(id){ const s = store.get('save.'+id, null); return s ? s.data : null; }
-function saveInfo(id){ return store.get('save.'+id, null); }
-function clearSave(id){ store.del('save.'+id); }
+/* ---------- 途中セーブ / 自己ベスト ---------- */
+function save(id, data){
+  DOC.saves[id] = { at: now(), data };
+  if(commit('save')) return true;
+  // 容量オーバー：直前の状態に戻して失敗を返す
+  DOC.saves[id] = { at: now(), data: null }; commit('save'); return false;
+}
+function load(id){ const s = DOC.saves[id]; return s && s.data != null ? s.data : null; }
+function saveInfo(id){ const s = DOC.saves[id]; return s && s.data != null ? { at: s.at, data: s.data } : null; }
+function clearSave(id){ if(DOC.saves[id] && DOC.saves[id].data == null) return; DOC.saves[id] = { at: now(), data: null }; commit('save'); }
 function best(id, value, better){ // better(a,b): a が b より良いなら true
-  const cur = store.get('best.'+id, null);
+  const cur = DOC.best[id] ? DOC.best[id].v : null;
   if(value === undefined) return cur;
-  if(cur == null || better(value, cur)){ store.set('best.'+id, value); return true; }
+  if(cur == null || better(value, cur)){ DOC.best[id] = { at: now(), v: value }; commit('best'); return true; }
   return false;
+}
+
+/* =========================================================
+   クラウド同期（GitHub Gist）
+   - 個人のGitHubアカウントに「非公開Gist」を1つ作り、そこに doc を保存
+   - トークンとAPIキーは同期しない（端末にだけ保存）
+   - 統合ルール：成績はIDで合算、セーブ・ベスト・プレイヤー名は新しい方を採用
+   ========================================================= */
+const GIST_FILE = 'asobibako-save.json';
+const GIST_DESC = 'あそびばこ セーブデータ（自動同期）';
+function mergeDocs(a, b){
+  const out = emptyDoc();
+  out.profile = (b.profile && (b.profile.at||0) > (a.profile.at||0)) ? b.profile : a.profile;
+  const keys = (x, y) => new Set([...Object.keys(x||{}), ...Object.keys(y||{})]);
+  keys(a.saves, b.saves).forEach(k => { const x = a.saves[k], y = (b.saves||{})[k]; out.saves[k] = !y ? x : !x ? y : (y.at > x.at ? y : x); });
+  keys(a.best, b.best).forEach(k => { const x = a.best[k], y = (b.best||{})[k]; out.best[k] = !y ? x : !x ? y : (y.at > x.at ? y : x); });
+  const seen = new Map();
+  [...(a.records||[]), ...(b.records||[])].forEach(r => { if(r && r.id && !seen.has(r.id)) seen.set(r.id, r); });
+  out.records = [...seen.values()].sort((p, q) => p.at - q.at).slice(-3000);
+  return out;
+}
+const Cloud = (() => {
+  let timer = 0, busy = false;
+  const cfg = () => store.get('cloud', { provider: 'none', token: '', gistId: '', lastSync: 0, lastError: '' });
+  const setCfg = p => store.set('cloud', Object.assign(cfg(), p));
+  async function gh(path, opt={}){
+    const c = cfg();
+    const res = await fetch('https://api.github.com' + path, Object.assign({}, opt, {
+      headers: Object.assign({ 'Accept': 'application/vnd.github+json', 'Authorization': 'Bearer ' + c.token }, opt.body ? { 'Content-Type': 'application/json' } : {}),
+    }));
+    if(!res.ok){
+      const e = await res.json().catch(() => ({}));
+      throw new Error(res.status === 401 ? 'トークンが正しくありません' : res.status === 404 ? 'Gistが見つかりません（トークンに gist 権限があるか確認）' : (e.message || ('HTTP ' + res.status)));
+    }
+    return res.json();
+  }
+  async function findOrCreate(){
+    const c = cfg();
+    if(c.gistId) return c.gistId;
+    const list = await gh('/gists?per_page=100');
+    const hit = list.find(g => g.files && g.files[GIST_FILE]);
+    if(hit){ setCfg({ gistId: hit.id }); return hit.id; }
+    const made = await gh('/gists', { method: 'POST', body: JSON.stringify({ description: GIST_DESC, public: false, files: { [GIST_FILE]: { content: JSON.stringify(DOC) } } }) });
+    setCfg({ gistId: made.id }); return made.id;
+  }
+  async function sync(){
+    const c = cfg();
+    if(c.provider !== 'gist' || !c.token || busy) return { ok: false, skipped: true };
+    busy = true; emit('syncing');
+    try{
+      const id = await findOrCreate();
+      const g = await gh('/gists/' + id);
+      const f = g.files && g.files[GIST_FILE];
+      let remote = null;
+      if(f){
+        const text = f.truncated && f.raw_url ? await (await fetch(f.raw_url)).text() : f.content;
+        try{ remote = JSON.parse(text); }catch(e){ remote = null; }
+      }
+      const merged = remote ? mergeDocs(DOC, Object.assign(emptyDoc(), remote)) : DOC;
+      DOC = merged; store.set(DOC_KEY, DOC);
+      await gh('/gists/' + id, { method: 'PATCH', body: JSON.stringify({ files: { [GIST_FILE]: { content: JSON.stringify(DOC) } } }) });
+      setCfg({ lastSync: now(), lastError: '' });
+      listeners.forEach(fn => { try{ fn('sync'); }catch(e){} });
+      emit('ok'); return { ok: true };
+    }catch(e){
+      setCfg({ lastError: e.message || String(e) }); emit('error'); return { ok: false, error: e.message || String(e) };
+    }finally{ busy = false; }
+  }
+  const subs = new Set();
+  function emit(s){ subs.forEach(fn => { try{ fn(s); }catch(e){} }); }
+  return {
+    status(){ const c = cfg(); return { provider: c.provider, connected: c.provider === 'gist' && !!c.token, gistId: c.gistId, lastSync: c.lastSync, lastError: c.lastError, busy }; },
+    async connect(token, gistId=''){ setCfg({ provider: 'gist', token: String(token).trim(), gistId: String(gistId).trim(), lastError: '' }); return sync(); },
+    disconnect(){ setCfg({ provider: 'none', token: '', gistId: '', lastError: '' }); emit('off'); },
+    sync,
+    onStatus(fn){ subs.add(fn); return () => subs.delete(fn); },
+    _dirty(){ if(!Cloud.status().connected) return; clearTimeout(timer); timer = setTimeout(sync, 4000); },
+  };
+})();
+
+/* ---------- 書き出し / 読み込み（手動バックアップ） ---------- */
+function exportData(){ return JSON.stringify(DOC, null, 1); }
+function importData(text){
+  const d = JSON.parse(text);
+  if(!d || typeof d !== 'object' || !('records' in d)) throw new Error('あそびばこのデータではありません');
+  DOC = mergeDocs(DOC, Object.assign(emptyDoc(), d)); commit('import'); return true;
 }
 
 /* ---------- トースト ---------- */
@@ -193,6 +384,7 @@ function mount({id, title, onSave, home='../../index.html'}){
   const drawSnd = () => { snd.innerHTML = SE.muted ? ICON.off : ICON.on; snd.setAttribute('aria-pressed', String(!SE.muted)); };
   drawSnd();
   snd.addEventListener('click', () => { SE.setMuted(!SE.muted); drawSnd(); SE.play('pop'); toast(SE.muted ? '効果音オフ' : '効果音オン', 900); });
+  onChange(r => { if(r === 'settings') drawSnd(); });
   bar.querySelector('.k-home').addEventListener('click', goHome);
   document.body.prepend(bar);
   // タブを閉じた・アプリを切り替えたときも進行を保存
@@ -211,12 +403,16 @@ function persist(){
   }
   return true;
 }
-function goHome(){
+async function goHome(){
   SE.play('save');
   const saved = persist();
   toast(saved ? 'セーブしました' : 'ホームに戻ります', 800);
   current.leaving = true;
-  setTimeout(() => { location.href = current.home; }, 420);
+  const wait = new Promise(r => setTimeout(r, 420));
+  // クラウド接続中は送信を待つ（最大2.5秒）
+  const up = Cloud.status().connected ? Promise.race([Cloud.sync(), new Promise(r => setTimeout(r, 2500))]) : null;
+  await Promise.all([wait, up]);
+  location.href = current.home;
 }
 
 /* すべての .k-btn / .k-seg button に押下音 */
@@ -228,5 +424,7 @@ document.addEventListener('click', e => {
 document.addEventListener('pointerdown', () => SE.unlock(), {once:true});
 
 window.Kit = { SE, store, save, load, saveInfo, clearSave, best, toast, confirm: confirmBox,
-  celebrate, fail, shake, screen, mount, goHome, persist, ICON };
+  celebrate, fail, shake, screen, mount, goHome, persist, ICON,
+  settings, profile, players, mainName, record, records, deleteRecords, newGroup,
+  cloud: Cloud, onChange, exportData, importData, _mergeDocs: mergeDocs };
 })();

@@ -26,22 +26,7 @@
   --k-body:"Zen Maru Gothic",system-ui,sans-serif;
   color-scheme:light;
 }
-@media (prefers-color-scheme: dark){
-  :root:not([data-theme="light"]){
-    --k-board:#2b2520; --k-board2:#352d26;
-    --k-label:#3b342c; --k-label2:#463e35;
-    --k-ink:#f6ecdc; --k-ink2:#cdbfa9;
-    --k-shadow:4px 4px 0 #0e0b08;
-    color-scheme:dark;
-  }
-}
-:root[data-theme="dark"]{
-  --k-board:#2b2520; --k-board2:#352d26;
-  --k-label:#3b342c; --k-label2:#463e35;
-  --k-ink:#f6ecdc; --k-ink2:#cdbfa9;
-  --k-shadow:4px 4px 0 #0e0b08;
-  color-scheme:dark;
-}
+/* ライトモード専用（ダークモードは使わない） */
 
 *,*::before,*::after{box-sizing:border-box}
 [hidden]{display:none !important}
