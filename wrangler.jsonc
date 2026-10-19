@@ -2,7 +2,7 @@
   // あそびばこ — Cloudflare Workers（静的ファイル＋AI中継）
   // Cloudflare の Worker 名はこの name と同じにすること
   "$schema": "./node_modules/wrangler/config-schema.json",
-  "name": "asobibako",
+  "name": "asobibiako",
   "main": "src/worker.js",
   "compatibility_date": "2026-09-01",
   "assets": {

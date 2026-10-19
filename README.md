@@ -51,7 +51,7 @@ GitHub の `main` に push すると、Cloudflare が自動でビルド・公開
 
 ### 初回の設定（Cloudflare の画面）
 
-1. **Workers & Pages → Create application → GitHub** を選び、このリポジトリを接続する。Worker の名前は `asobibako`（`wrangler.jsonc` の `name` と同じ）
+1. **Workers & Pages → Create application → GitHub** を選び、このリポジトリを接続する。Worker の名前は `asobibiako`（`wrangler.jsonc` の `name` と同じにする。違うとビルドが失敗する）
 2. 作った Worker の **Settings → Variables and Secrets** に登録して、Deploy する
 
    | 名前 | 種類 | 中身 |
