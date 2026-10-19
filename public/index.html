@@ -216,6 +216,9 @@ details.k-more summary{cursor:pointer;font-weight:900;font-size:13px;color:var(-
 .sheet .who{font-size:13px;font-weight:900;color:var(--k-ink2);margin:0 0 12px;line-height:1.5}
 footer.hub-foot{text-align:center;color:var(--k-ink2);font-size:12px;padding:0 16px 40px}
 /* ---- AI選択 ---- */
+.own-note{font-family:var(--k-body);font-weight:900;font-size:12px;color:var(--k-ink2);margin-left:6px}
+.ai-ok{margin:6px 0 8px;font-weight:900;color:var(--k-teal)}
+.ai-server .inline{display:flex;gap:8px}
 .ai-pick{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 .ai-pick button{min-height:52px;border:3px solid var(--k-ink);border-radius:12px;background:var(--k-label);box-shadow:var(--k-shadow);
   font-family:var(--k-display);font-size:19px;color:var(--k-ink);transition:transform .08s, box-shadow .08s}
@@ -310,8 +313,24 @@ footer.hub-foot{text-align:center;color:var(--k-ink2);font-size:12px;padding:0 1
           </div>
           <p class="ai-now" id="aiNow" aria-live="polite"></p>
         </div>
+        <div class="ai-box ai-server" id="srvBox" hidden>
+          <b class="ai-box__name">サーバのAI</b>
+          <p class="k-hint" id="srvInfo" style="margin:2px 0 0"></p>
+          <div id="srvLocked">
+            <label class="k-label" for="srvPass">合言葉</label>
+            <div class="inline">
+              <input class="k-input" id="srvPass" type="password" inputmode="numeric" autocomplete="off" placeholder="合言葉を入力">
+              <button class="k-btn k-btn--teal k-btn--sm" id="srvUnlock" type="button" style="min-height:46px">確認</button>
+            </div>
+            <p class="k-hint">合言葉が合えば、自分のキーがなくてもAIのゲームで遊べます。</p>
+          </div>
+          <div id="srvUnlocked" hidden>
+            <p class="ai-ok">合言葉OK — サーバのキーで遊べます</p>
+            <button class="k-btn k-btn--ghost k-btn--sm" id="srvLock" type="button">この端末の合言葉を消す</button>
+          </div>
+        </div>
         <div class="ai-box" data-box="claude">
-          <b class="ai-box__name">Claude</b>
+          <b class="ai-box__name">Claude <small class="own-note">自分のキー（任意）</small></b>
           <label class="k-label" for="sClaude">APIキー</label>
           <div class="inline">
             <input class="k-input" id="sClaude" type="password" autocomplete="off" spellcheck="false" placeholder="sk-ant-…">
@@ -321,7 +340,7 @@ footer.hub-foot{text-align:center;color:var(--k-ink2);font-size:12px;padding:0 1
           <input class="k-input" id="mClaude" type="text" autocomplete="off" spellcheck="false" autocapitalize="off" placeholder="claude-sonnet-5-5">
         </div>
         <div class="ai-box" data-box="gemini">
-          <b class="ai-box__name">Gemini</b>
+          <b class="ai-box__name">Gemini <small class="own-note">自分のキー（任意）</small></b>
           <label class="k-label" for="sGemini">APIキー</label>
           <div class="inline">
             <input class="k-input" id="sGemini" type="password" autocomplete="off" spellcheck="false" placeholder="AIza…">
@@ -330,7 +349,7 @@ footer.hub-foot{text-align:center;color:var(--k-ink2);font-size:12px;padding:0 1
           <label class="k-label" for="mGemini">モデル名</label>
           <input class="k-input" id="mGemini" type="text" autocomplete="off" spellcheck="false" autocapitalize="off" placeholder="gemini-3.8-flash">
         </div>
-        <p class="k-hint">AIを使うゲームは、ここで選んだAIとモデルで動きます。キーはこの端末にだけ保存されます（クラウドセーブにも含まれません）。</p>
+        <p class="k-hint">AIを使うゲームは、ここで選んだAIで動きます。自分のキーを入れると、サーバのキーより優先して使います（モデル名も自分の設定）。キーはこの端末にだけ保存されます（クラウドセーブにも含まれません）。</p>
       </div>
 
       <div class="k-panel set">
@@ -829,12 +848,37 @@ $('sMute').addEventListener('click', () => {
 
 // AI：使用するAI・APIキー・モデル名
 function drawAI(){
-  const c = Kit.ai.current();
+  const c = Kit.ai.current(), sv = Kit.ai.server();
   document.querySelectorAll('.ai-pick [data-ai]').forEach(b => b.setAttribute('aria-checked', String(b.dataset.ai === c.provider)));
-  document.querySelectorAll('.ai-box').forEach(b => b.classList.toggle('is-on', b.dataset.box === c.provider));
-  $('aiNow').textContent = c.ready ? `いま使うAI：${c.label}（${c.model}）` : `いま使うAI：${c.label}（${c.model}）— APIキーが未設定です`;
+  document.querySelectorAll('.ai-box[data-box]').forEach(b => b.classList.toggle('is-on', c.via === 'own' && b.dataset.box === c.provider));
+  const via = c.via === 'own' ? 'あなたのキー' : c.via === 'server' ? 'サーバのキー' : '';
+  $('aiNow').textContent = c.ready ? `いま使うAI：${c.label}（${c.model}）— ${via}`
+    : c.via === 'server' ? `いま使うAI：${c.label}（${c.model}）— 合言葉を入れると使えます`
+    : `いま使うAI：${c.label} — APIキーが未設定です`;
   $('aiNow').classList.toggle('is-warn', !c.ready);
+  // サーバのAI（Cloudflare で公開しているときだけ表示）
+  const box = $('srvBox');
+  box.hidden = !sv;
+  if(sv){
+    const has = ['claude','gemini'].filter(k => sv.server && sv.server[k]).map(k => `${Kit.ai.LABEL[k]}（${sv.models[k]}）`);
+    $('srvInfo').textContent = has.length ? `使えるAI：${has.join('、')}` : 'サーバにAIのキーが登録されていません';
+    const ok = !!Kit.store.get('passcodeOk', false);
+    $('srvLocked').hidden = ok || !sv.passcode; $('srvUnlocked').hidden = !ok;
+    if(!sv.passcode) $('srvInfo').textContent += '（サーバの合言葉が未設定のため使えません）';
+    box.classList.toggle('is-on', c.via === 'server');
+  }
 }
+$('srvUnlock').addEventListener('click', async () => {
+  const b = $('srvUnlock'); b.disabled = true;
+  const r = await Kit.ai.unlock($('srvPass').value);
+  b.disabled = false;
+  if(r.ok){ $('srvPass').value = ''; Kit.SE.play('ok'); Kit.toast('合言葉OK。AIのゲームで遊べます'); }
+  else { Kit.SE.play('ng'); Kit.shake($('srvPass')); Kit.toast(r.error, 2400); }
+  drawAI();
+});
+$('srvPass').addEventListener('keydown', e => { if(e.key === 'Enter' && !e.isComposing) $('srvUnlock').click(); });
+$('srvLock').addEventListener('click', () => { Kit.ai.lock(); drawAI(); Kit.toast('合言葉を消しました'); });
+Kit.onChange(r => { if(r === 'settings') drawAI(); });
 document.querySelector('.ai-pick').addEventListener('click', e => {
   const b = e.target.closest('[data-ai]'); if(!b) return;
   Kit.settings.set({ aiProvider: b.dataset.ai }); drawAI();

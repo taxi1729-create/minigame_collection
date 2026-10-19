@@ -33,7 +33,8 @@
 AIを使うゲーム（同母音異義語・嘘雑学クイズ・ダウトニュース・異種伝言・無言トーク・文字バトラー）は、設定変更で選んだAIとモデルで動きます。
 
 - 使用するAI：Claude か Gemini をボタンで選択
-- それぞれのAPIキーとモデル名を手入力（初期値 `claude-sonnet-5-5` / `gemini-3.8-flash`）
+- **サーバのキー**：Cloudflare に登録したAPIキー・モデル名を、合言葉を入れた人だけが使える（キーはブラウザに渡らない）
+- **自分のキー（任意）**：設定変更でAPIキーとモデル名を入れると、サーバのキーより優先して使う
 - 呼び出しは `Kit.ai.ask({ system, prompt, json, search, maxTokens })` に集約（`search:true` でWeb検索付き）
 
 ## セーブとクラウド
@@ -44,21 +45,58 @@ AIを使うゲーム（同母音異義語・嘘雑学クイズ・ダウトニュ
   - トークンとAPIキーは同期しません（端末にだけ保存）
 - バックアップの書き出し／読み込み（JSONファイル）もできます。
 
+## 公開（Cloudflare Workers）
+
+GitHub の `main` に push すると、Cloudflare が自動でビルド・公開します。`public/` がサイト本体、`src/worker.js` が `/api/*` を処理します。
+
+### 初回の設定（Cloudflare の画面）
+
+1. **Workers & Pages → Create application → GitHub** を選び、このリポジトリを接続する。Worker の名前は `asobibako`（`wrangler.jsonc` の `name` と同じ）
+2. 作った Worker の **Settings → Variables and Secrets** に登録して、Deploy する
+
+   | 名前 | 種類 | 中身 |
+   |---|---|---|
+   | `GAME_PASSCODE` | Secret | 合言葉 |
+   | `CLAUDE_API_KEY` | Secret | Claude のAPIキー |
+   | `GEMINI_API_KEY` | Secret | Gemini のAPIキー（使わないなら省略可） |
+   | `AI_PROVIDER` | Text | `claude` または `gemini`（初期値） |
+   | `CLAUDE_MODEL` / `GEMINI_MODEL` | Text | モデル名 |
+
+3. **Cloudflare Access** でサイト全体をログイン制にする：Worker の **Settings → Domains & Routes** で workers.dev（とプレビューURL）の Cloudflare Access を有効にし、許可するメールアドレスをポリシーに追加する
+
+### API
+
+| パス | 内容 |
+|---|---|
+| `GET /api/config` | サーバに登録されたAIの有無・モデル名（キーは返さない） |
+| `POST /api/auth` | 合言葉の確認（8回間違えると5分ロック） |
+| `POST /api/ai` | ヘッダ `x-game-passcode` が正しいときだけ、サーバのキーで Claude / Gemini に中継（`search:true` でWeb検索） |
+
+### 手元で試す
+
+```bash
+npm install
+cp .dev.vars.example .dev.vars   # 合言葉とキーを書く（.gitignore 済み）
+npm run dev                       # http://localhost:8787
+```
+
 ## 構成
 
 ```
-index.html              タイトル（4タブ）
-manifest.webmanifest    ホーム画面追加用
-icons/                  アプリアイコン
-kit/kit.css             共通UI（段ボール＋紙ラベル＋二色ズレ影、ライトモード専用）
-kit/kit.js              共通機能：効果音・セーブ・成績・設定・クラウド同期・ホームボタン・演出
-games/<id>/index.html   各ゲーム
+wrangler.jsonc                 Cloudflare Workers の設定
+src/worker.js                  /api/*（合言葉・AI中継）
+public/index.html              タイトル（4タブ）
+public/manifest.webmanifest    ホーム画面追加用
+public/icons/                  アプリアイコン
+public/kit/kit.css             共通UI（段ボール＋紙ラベル＋二色ズレ影、ライトモード専用）
+public/kit/kit.js              共通機能：効果音・セーブ・成績・設定・AI・クラウド同期・ホームボタン・演出
+public/games/<id>/index.html   各ゲーム
 ```
 
 ### 新しいゲームを追加するとき
 
-1. `games/<id>/index.html` を作り、`../../kit/kit.css` と `../../kit/kit.js` を読み込む（`<body class="kit">`）
+1. `public/games/<id>/index.html` を作り、`../../kit/kit.css` と `../../kit/kit.js` を読み込む（`<body class="kit">`）
 2. `Kit.mount({ id, title, onSave })` でホームボタン付きのバーを出す。`onSave` は途中経過を返す（終わっていれば `null`）。起動時に `Kit.load(id)` で再開
 3. 人数と名前は `Kit.settings.get().partySize` と `Kit.players(n)`、APIキーは `Kit.settings.get().keys`
 4. 終了時に `Kit.record({ game, player, result:'win'|'lose'|'clear'|'fail'|'play', score, detail, group })`、演出は `Kit.celebrate()` / `Kit.fail()`
-5. `index.html` の `GAMES` 配列に1行追加（`min` / `max` / おすすめ人数）
+5. `public/index.html` の `GAMES` 配列に1行追加（`min` / `max` / おすすめ人数）

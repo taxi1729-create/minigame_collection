@@ -63,7 +63,11 @@ const settings = {
     const s = store.get('settings', {});
     const out = Object.assign({}, SETTINGS_DEFAULT, s, { keys: Object.assign({}, SETTINGS_DEFAULT.keys, s.keys||{}), models: Object.assign({}, SETTINGS_DEFAULT.models, s.models||{}) });
     // 使うAIが未選択なら、キーが入っている方（両方なら Claude）
-    if(out.aiProvider !== 'claude' && out.aiProvider !== 'gemini') out.aiProvider = (!out.keys.claude && out.keys.gemini) ? 'gemini' : 'claude';
+    if(out.aiProvider !== 'claude' && out.aiProvider !== 'gemini'){
+      const sv = store.get('serverAI', null);
+      out.aiProvider = out.keys.claude ? 'claude' : out.keys.gemini ? 'gemini'
+        : (sv && sv.provider === 'gemini' && sv.server && sv.server.gemini) ? 'gemini' : 'claude';
+    }
     if(URL_PLAYERS) out.partySize = URL_PLAYERS; // ?players=N で開いたページだけ人数を上書き（保存はしない）
     return out;
   },
@@ -309,12 +313,76 @@ const AI_DEFAULT_MODELS = { claude: 'claude-sonnet-5-5', gemini: 'gemini-3.8-fla
 const AI_LABEL = { claude: 'Claude', gemini: 'Gemini' };
 class AIError extends Error{ constructor(msg, detail, status){ super(msg); this.detail = detail || ''; this.status = status || 0; } }
 const ai = (() => {
+  /* ---- サーバ（Cloudflare Worker）側のAI ----
+     自分のキーが入っていればそれを優先。無ければサーバのキーを合言葉つきで使う */
+  const API = path => new URL('/api/' + path, location.origin).href;
+  const server = () => store.get('serverAI', null);   // {provider, server:{claude,gemini}, models:{...}, passcode}
+  const unlocked = () => !!store.get('passcodeOk', false) && !!store.get('passcode', '');
   function current(){
     const s = settings.get();
     const provider = s.aiProvider === 'gemini' ? 'gemini' : 'claude';
-    const key = (s.keys[provider] || '').trim();
+    const own = (s.keys[provider] || '').trim();
+    const label = AI_LABEL[provider];
+    if(own){
+      const model = ((s.models || {})[provider] || '').trim() || AI_DEFAULT_MODELS[provider];
+      return { provider, key: own, model, label, ready: true, via: 'own' };
+    }
+    const sv = server();
+    if(sv && sv.server && sv.server[provider]){
+      const ok = unlocked();
+      return { provider, key: '', model: (sv.models || {})[provider] || AI_DEFAULT_MODELS[provider], label, ready: ok, via: 'server', needPasscode: !ok };
+    }
     const model = ((s.models || {})[provider] || '').trim() || AI_DEFAULT_MODELS[provider];
-    return { provider, key, model, label: AI_LABEL[provider], ready: !!key };
+    return { provider, key: '', model, label, ready: false, via: 'none' };
+  }
+  async function refreshServer(){
+    try{
+      const ctl = new AbortController(); const t = setTimeout(() => ctl.abort(), 5000);
+      const res = await fetch(API('config'), { signal: ctl.signal, cache: 'no-store' }).finally(() => clearTimeout(t));
+      const ct = res.headers.get('content-type') || '';
+      if(!res.ok || !ct.includes('json')){ store.del('serverAI'); return null; } // Worker の無い環境（ローカルや他のホスティング）
+      const cfg = await res.json();
+      store.set('serverAI', cfg);
+      if(!cfg.passcode){ store.del('passcodeOk'); }
+      listeners.forEach(fn => { try{ fn('settings'); }catch(e){} });
+      return cfg;
+    }catch(e){ return server(); } // 通信失敗時は前回の情報のまま
+  }
+  async function unlock(passcode){
+    passcode = String(passcode || '').trim();
+    if(!passcode) return { ok: false, error: '合言葉を入れてください' };
+    let res, data;
+    try{
+      res = await fetch(API('auth'), { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ passcode }) });
+      data = await res.json().catch(() => null);
+    }catch(e){ return { ok: false, error: 'サーバにつながりませんでした' }; }
+    if(res.ok && data && data.ok){
+      store.set('passcode', passcode); store.set('passcodeOk', true);
+      listeners.forEach(fn => { try{ fn('settings'); }catch(e){} });
+      return { ok: true };
+    }
+    return { ok: false, error: (data && data.error && data.error.message) || '合言葉を確認できませんでした' };
+  }
+  function lock(){ store.del('passcode'); store.del('passcodeOk'); listeners.forEach(fn => { try{ fn('settings'); }catch(e){} }); }
+  async function viaServer(c, o){
+    let res, data;
+    try{
+      res = await fetch(API('ai'), { method: 'POST', signal: o.signal,
+        headers: { 'content-type': 'application/json', 'x-game-passcode': store.get('passcode', '') },
+        body: JSON.stringify({ provider: c.provider, system: o.system || '', prompt: o.prompt, maxTokens: o.maxTokens || 2000, search: !!o.search }) });
+      data = await res.json().catch(() => null);
+    }catch(e){
+      if(e && e.name === 'AbortError') throw e;
+      throw new AIError('サーバにつながりませんでした。ネット接続を確認してください', e && e.message);
+    }
+    if(!res.ok){
+      const err = (data && data.error) || {};
+      if(err.code === 'bad_passcode'){ lock(); throw new AIError('合言葉が違うか、変わりました。タイトルの「設定変更」で合言葉を入れ直してください', 'bad_passcode', 401); }
+      if(err.upstream) throw httpErr(err.upstream, err.detail);
+      throw new AIError(err.message || 'AIでエラーが起きました', err.detail || `HTTP ${res.status}`, res.status);
+    }
+    if(o.json && data && data.stop === 'max_tokens') throw new AIError('AIの返答が長すぎて途中で切れました。もう一度試してください', 'max_tokens');
+    return { text: (data && data.text) || '', sources: new Set((data && data.sources) || []) };
   }
   function httpErr(status, msg){
     msg = msg || '';
@@ -410,15 +478,18 @@ const ai = (() => {
 
   async function ask(o = {}){
     const c = current();
-    if(!c.key) throw new AIError(`使用するAI（${c.label}）のAPIキーが未設定です。タイトルの「設定変更」で入れてください`, 'no key');
-    const r = c.provider === 'gemini' ? await gemini(c, o) : await claude(c, o);
+    if(c.via === 'server' && c.needPasscode) throw new AIError('AIを使うには合言葉が必要です。タイトルの「設定変更」で合言葉を入れてください', 'need passcode');
+    if(!c.ready) throw new AIError(`使用するAI（${c.label}）のAPIキーが未設定です。タイトルの「設定変更」で入れてください`, 'no key');
+    const r = c.via === 'server' ? await viaServer(c, o) : c.provider === 'gemini' ? await gemini(c, o) : await claude(c, o);
     if(!r.text) throw new AIError('AIが返答しませんでした。もう一度試してください', 'empty text');
-    const out = { text: r.text, sources: r.sources, provider: c.provider, model: c.model };
+    const out = { text: r.text, sources: r.sources, provider: c.provider, model: c.model, via: c.via };
     if(o.json) out.json = parseJson(r.text);
     return out;
   }
-  return { ask, current, parseJson, Error: AIError, DEFAULT_MODELS: AI_DEFAULT_MODELS, LABEL: AI_LABEL };
+  return { ask, current, parseJson, refreshServer, unlock, lock, server, Error: AIError, DEFAULT_MODELS: AI_DEFAULT_MODELS, LABEL: AI_LABEL };
 })();
+// ページを開くたびにサーバのAI設定を確認（Worker が無ければ何もしない）
+if(typeof location !== 'undefined' && /^https?:$/.test(location.protocol)) setTimeout(() => ai.refreshServer(), 0);
 
 /* ---------- 書き出し / 読み込み（手動バックアップ） ---------- */
 function exportData(){ return JSON.stringify(DOC, null, 1); }

@@ -1,0 +1,7 @@
+# 秘密の値（APIキー・合言葉）はコミットしない
+.dev.vars*
+!.dev.vars.example
+.env*
+!.env.example
+node_modules/
+.wrangler/

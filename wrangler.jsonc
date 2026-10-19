@@ -1,0 +1,23 @@
+{
+  // あそびばこ — Cloudflare Workers（静的ファイル＋AI中継）
+  // Cloudflare の Worker 名はこの name と同じにすること
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "asobibako",
+  "main": "src/worker.js",
+  "compatibility_date": "2026-09-01",
+  "assets": {
+    "directory": "./public",
+    "binding": "ASSETS",
+    // /api/ だけ Worker が処理し、それ以外は public/ のファイルをそのまま返す
+    "run_worker_first": ["/api/*"]
+  },
+  // 秘密でない設定（Cloudflare の画面で上書きしてよい）
+  "vars": {
+    "AI_PROVIDER": "claude",
+    "CLAUDE_MODEL": "claude-sonnet-5-5",
+    "GEMINI_MODEL": "gemini-3.8-flash"
+  },
+  // 秘密の値（GAME_PASSCODE / CLAUDE_API_KEY / GEMINI_API_KEY）は
+  // Cloudflare の画面（Secret）か `npx wrangler secret put 名前` で登録する。ここには書かない。
+  "observability": { "enabled": true }
+}

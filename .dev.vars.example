@@ -1,0 +1,10 @@
+# ローカル確認用（npx wrangler dev）。このファイルを .dev.vars にコピーして値を入れる。
+# .dev.vars は .gitignore 済みなので GitHub には上がらない。
+# 本番では Cloudflare の Worker → Settings → Variables and Secrets に同じ名前で登録する。
+GAME_PASSCODE="ここに合言葉"
+CLAUDE_API_KEY="sk-ant-..."
+GEMINI_API_KEY="AIza..."
+# 秘密でない設定（wrangler.jsonc の vars を上書きしたいときだけ）
+# AI_PROVIDER="claude"
+# CLAUDE_MODEL="claude-sonnet-5-5"
+# GEMINI_MODEL="gemini-3.8-flash"
