@@ -57,7 +57,7 @@ function onChange(fn){ listeners.add(fn); return () => listeners.delete(fn); }
 
 /* ---------- 設定（端末ごと。同期しない） ---------- */
 const URL_PLAYERS = (() => { try{ const n = parseInt(new URLSearchParams(location.search).get('players'), 10); return n >= 1 && n <= 8 ? n : 0; }catch(e){ return 0; } })();
-const SETTINGS_DEFAULT = { volume: 0.7, muted: false, partySize: 3, aiProvider: '', keys: { claude:'', gemini:'' }, models: { claude:'claude-sonnet-5-5', gemini:'gemini-3.8-flash' } };
+const SETTINGS_DEFAULT = { volume: 0.7, muted: false, partySize: 3, aiProvider: '', keys: { claude:'', gemini:'' }, models: { claude:'claude-sonnet-5-5', gemini:'gemini-3.5-flash-lite' } };
 const settings = {
   get(){
     const s = store.get('settings', {});
@@ -85,6 +85,12 @@ const settings = {
     return next;
   },
 };
+// 旧初期モデル（gemini-3.8-flash）が保存されている端末は新しい初期値に置き換える（1回だけ）
+if(!store.get('mig.geminiModel', false)){
+  const s0 = store.get('settings', null);
+  if(s0 && s0.models && s0.models.gemini === 'gemini-3.8-flash'){ s0.models.gemini = 'gemini-3.5-flash-lite'; store.set('settings', s0); }
+  store.set('mig.geminiModel', true);
+}
 // 旧ミュート設定の移行
 if(store.get('mute', null) != null){ const s = store.get('settings', {}); if(s.muted == null){ s.muted = !!store.get('mute', false); store.set('settings', s); } store.del('mute'); }
 
@@ -309,7 +315,7 @@ const Cloud = (() => {
      → { text, json, sources:Set<url>, provider, model }
    失敗時は Kit.ai.Error（message は画面にそのまま出せる日本語、detail は技術情報）
    ========================================================= */
-const AI_DEFAULT_MODELS = { claude: 'claude-sonnet-5-5', gemini: 'gemini-3.8-flash' };
+const AI_DEFAULT_MODELS = { claude: 'claude-sonnet-5-5', gemini: 'gemini-3.5-flash-lite' };
 const AI_LABEL = { claude: 'Claude', gemini: 'Gemini' };
 class AIError extends Error{ constructor(msg, detail, status){ super(msg); this.detail = detail || ''; this.status = status || 0; } }
 const ai = (() => {

@@ -7,4 +7,4 @@ GEMINI_API_KEY="AIza..."
 # 秘密でない設定（wrangler.jsonc の vars を上書きしたいときだけ）
 # AI_PROVIDER="claude"
 # CLAUDE_MODEL="claude-sonnet-5-5"
-# GEMINI_MODEL="gemini-3.8-flash"
+# GEMINI_MODEL="gemini-3.5-flash-lite"

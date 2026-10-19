@@ -52,7 +52,7 @@ GitHub の `main` に push すると、Cloudflare が自動でビルド・公開
 ### 初回の設定（Cloudflare の画面）
 
 1. **Workers & Pages → Create application → GitHub** を選び、このリポジトリを接続する。Worker の名前は `asobibiako`（`wrangler.jsonc` の `name` と同じにする。違うとビルドが失敗する）
-2. 作った Worker の **Settings → Variables and Secrets** に登録して、Deploy する
+2. 作った Worker の **Settings → Variables and Secrets** に登録して、Deploy する（`wrangler.jsonc` は `keep_vars: true` なので、push しても画面で設定した値は消えない）
 
    | 名前 | 種類 | 中身 |
    |---|---|---|
@@ -60,7 +60,7 @@ GitHub の `main` に push すると、Cloudflare が自動でビルド・公開
    | `CLAUDE_API_KEY` | Secret | Claude のAPIキー |
    | `GEMINI_API_KEY` | Secret | Gemini のAPIキー（使わないなら省略可） |
    | `AI_PROVIDER` | Text | `claude` または `gemini`（初期値） |
-   | `CLAUDE_MODEL` / `GEMINI_MODEL` | Text | モデル名 |
+   | `CLAUDE_MODEL` / `GEMINI_MODEL` | Text | モデル名（未設定なら `claude-sonnet-5-5` / `gemini-3.5-flash-lite`） |
    | `AI_FALLBACK` | Text | `off` にすると、混雑時にもう一方のAIへ切り替えない（初期は切り替える） |
 
 3. **Cloudflare Access** でサイト全体をログイン制にする：Worker の **Settings → Domains & Routes** で workers.dev（とプレビューURL）の Cloudflare Access を有効にし、許可するメールアドレスをポリシーに追加する

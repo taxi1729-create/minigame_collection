@@ -9,7 +9,7 @@
      Text   : AI_PROVIDER（claude|gemini）, CLAUDE_MODEL, GEMINI_MODEL
    ========================================================= */
 
-const DEFAULT_MODELS = { claude: 'claude-sonnet-5-5', gemini: 'gemini-3.8-flash' };
+const DEFAULT_MODELS = { claude: 'claude-sonnet-5-5', gemini: 'gemini-3.5-flash-lite' };
 const MAX_PROMPT = 20000, MAX_SYSTEM = 4000, MAX_TOKENS = 8000;
 
 // 合言葉の総当たり対策（同じ isolate 内での簡易的な制限。主な防御は Cloudflare Access）
