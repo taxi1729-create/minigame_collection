@@ -1,3 +1,5 @@
+// HTMLに入れるAIの文章は必ずエスケープ
+function escHtml(v) { return String(v == null ? '' : v).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 // ui.js - 画面遷移・UI制御
 
 // ===== 画面管理 =====
@@ -47,7 +49,7 @@ function sharedPartySize() {
 // 共通設定の値を GameState に反映（ゲーム開始時点の値を使う）
 function applySharedSettings() {
   GameState.playerCount = sharedPartySize().n;
-  GameState.claudeApiKey = (Kit.settings.get().keys.claude || '').trim();
+  GameState.claudeApiKey = aiReady() ? 'on' : '';
 }
 function renderSharedSettings() {
   const { raw, n } = sharedPartySize();
@@ -65,10 +67,10 @@ function renderSharedSettings() {
   }
   const ai = document.getElementById('aiStatus');
   if (ai) {
-    const has = !!(Kit.settings.get().keys.claude || '').trim();
+    const c = Kit.ai.current(), has = c.ready;
     ai.classList.toggle('is-on', has);
-    ai.textContent = has ? 'AI変換・答え判定：使える'
-      : 'AI変換は使えません（タイトルの設定変更でClaude APIキーを入れると使えます）';
+    ai.textContent = has ? `AI変換・答え判定：${c.label}（${c.model}）で使える`
+      : `AI変換は使えません（いま使うAIは${c.label}。タイトルの設定変更でAPIキーを入れると使えます）`;
   }
 }
 
@@ -172,7 +174,7 @@ function buildPrevContentHtml(prevRecord) {
 
   let inner = '';
   if (actionType === 'ai') {
-    inner = `<p class="ai-text">${actionData.text}</p>`;
+    inner = `<p class="ai-text">${escHtml(actionData.text)}</p>`;
   } else if (actionType === 'drawing') {
     inner = typeof buildBugImageHtml === 'function'
       ? buildBugImageHtml(actionData.imageData, actionData.bugPositions)
@@ -360,16 +362,16 @@ function renderLastPlayerScreen(container) {
     resultDiv.innerHTML = `<div class="loading-box"><div class="loading-spinner"></div><p>AIが判定しています…</p></div>`;
 
     let isCorrect = false;
-    const apiKey = GameState.claudeApiKey || CONFIG.CLAUDE_API_KEY;
+    const apiKey = aiReady();
 
     // ローカル判定（類義語・順序不問）を先に実行
     const localResult = judgeAnswerLocally(answer, GameState.currentModifiers, baseTopic);
 
     if (apiKey && !localResult.isCorrect) {
-      // Claude APIで判定
+      // AIで判定
       const prompt = `以下のゲームの答え合わせをしてください。\n\n【正解のお題】：「${correctTopic}」\n（ベースの名詞：「${baseTopic}」に修飾語が累積したものです。）\n\n【プレイヤーの回答】：「${answer}」\n\n判定ルール：\n- 「${baseTopic}」という名詞が含まれていること（必須）\n- 修飾語は完全一致でなくてよい。ニュアンスや意図が概ね伝わっていれば正解\n- 修飾語の順番は問わない\n- 修飾語が一部抜けていても、大半が伝わっていれば正解とする\n- 「正解」または「不正解」のみ最初の行に書き、次の行に一言理由を添えること\n\n回答形式（必ずこの形式で）：\n正解\n理由：（一文）\nまたは\n不正解\n理由：（一文）`;
 
-      const result = await callClaude(prompt);
+      const result = await callAI(prompt);
       if (result) {
         isCorrect = result.trimStart().startsWith('正解');
         const lines      = result.split('\n').filter(l => l.trim());
@@ -377,7 +379,7 @@ function renderLastPlayerScreen(container) {
         resultDiv.innerHTML = `
           <div class="judge-result-box ${isCorrect ? 'correct' : 'wrong'}">
             <div class="judge-result-title">${isCorrect ? '正解！' : '不正解…'}</div>
-            <p class="judge-result-reason">${reasonLine.replace(/^理由[：:]\s*/, '')}</p>
+            <p class="judge-result-reason">${escHtml(reasonLine.replace(/^理由[：:]\s*/, ''))}</p>
           </div>
           <div class="correct-answer-reveal">
             <span class="correct-label">正解のお題</span>
@@ -456,7 +458,7 @@ function showResultScreen() {
     let contentHtml = '';
 
     if (actionType === 'ai') {
-      contentHtml = `<p class="ai-text" style="font-size:0.85rem;">${actionData.text}</p>`;
+      contentHtml = `<p class="ai-text" style="font-size:0.85rem;">${escHtml(actionData.text)}</p>`;
     } else if (actionType === 'drawing') {
       contentHtml = typeof buildBugImageHtml === 'function'
         ? buildBugImageHtml(actionData.imageData, actionData.bugPositions)

@@ -143,13 +143,7 @@ footer{text-align:center;font-size:12px;color:var(--ink2);margin-top:24px}
       <details class="api" id="apiDetails">
         <summary>🔑 AIの設定</summary>
         <p class="hint" id="keyState"></p>
-        <label class="lbl" for="apiModel">モデル</label>
-        <select id="apiModel">
-          <option value="claude-haiku-4-5-20251001">Claude Haiku 4.5（速い・安い）</option>
-          <option value="claude-sonnet-5-5">Claude Sonnet 5.5</option>
-          <option value="claude-opus-5-5">Claude Opus 5.5</option>
-        </select>
-        <p class="hint">キーはブラウザから Anthropic API へ直接送信され、このページのサーバーには送られません。</p>
+        <p class="hint">AIはタイトルの「設定変更」で選んだもの（Claude / Gemini とモデル名）を使います。</p>
       </details>
       <div class="row" style="margin-top:10px">
         <button class="btn gold" id="btnExtract" type="button">✨ トーク要素を抜き出す</button>
@@ -510,8 +504,8 @@ function renderLog(){
 
 function renderAll(){ renderEpisode(); renderElements(); renderControls(); renderLog(); }
 
-// ---------- custom episode via Claude API ----------
-const modelEl = $('apiModel');
+// ---------- custom episode via AI（Claude / Gemini） ----------
+
 // APIキーは共通設定（Kit.settings keys.claude）を使う。旧 mugon.apikey は共通設定が空のときだけ移行
 (() => {
   const old = store.get('mugon.apikey', '');
@@ -519,24 +513,20 @@ const modelEl = $('apiModel');
   if(old) store.del('mugon.apikey');
 })();
 // APIキーはタイトルの「設定変更」で入れたものを使う（このゲームに入力欄はない）
-const claudeKey = () => (Kit.settings.get().keys.claude || '').trim();
-const drawKeyState = () => { $('keyState').textContent = claudeKey()
-  ? 'Claude APIキー：設定済み（タイトルの「設定変更」で変えられます）'
-  : 'Claude APIキーが未設定です。タイトルの「設定変更」で入れると使えます。'; };
+const drawKeyState = () => { const c = Kit.ai.current(); $('keyState').textContent = c.ready
+  ? `使うAI：${c.label}（${c.model}）`
+  : `使うAI（${c.label}）のAPIキーが未設定です。タイトルの「設定変更」で入れると使えます。`; };
 drawKeyState();
-modelEl.value = store.get('mugon.model', modelEl.value) || modelEl.value;
-if(!modelEl.value) modelEl.selectedIndex = 0;
-modelEl.addEventListener('change', () => store.set('mugon.model', modelEl.value));
+
 
 function setMsg(t, err){ const m = $('customMsg'); m.textContent = t; m.classList.toggle('err', !!err); }
 
 async function extract(){
   const lines = $('customText').value.split(/\r?\n/).map(s=>s.trim()).filter(Boolean);
   if(lines.length !== 3){ setMsg(`エピソードは三行で書いてください（いま${lines.length}行）。`, true); return; }
-  const key = claudeKey();
-  if(!key){ $('apiDetails').open = true; drawKeyState(); setMsg('Claude APIキーが未設定です。タイトルの「設定変更」で入れてください。', true); return; }
+  if(!Kit.ai.current().ready){ $('apiDetails').open = true; drawKeyState(); setMsg(`使うAI（${Kit.ai.current().label}）のAPIキーが未設定です。タイトルの「設定変更」で入れてください。`, true); return; }
 
-  const btn = $('btnExtract'); btn.disabled = true; setMsg('⏳ Claude がトーク要素を抜き出しています…');
+  const btn = $('btnExtract'); btn.disabled = true; setMsg(`⏳ ${Kit.ai.current().label} がトーク要素を抜き出しています…`);
   const system = 'あなたは日本語の品詞分析アシスタントです。与えられた三部構成のエピソードから、パーティゲームで使う「トーク要素」を抜き出し、指定のJSONのみを出力します。前置きや説明、コードブロックは書きません。';
   const prompt = `次の短いエピソード（導入・展開・結論、各1文）からトーク要素を抜き出してください。
 
@@ -557,23 +547,7 @@ async function extract(){
 {"title":"...","elements":{"adj":[],"verb":[],"noun":[],"conj":[]}}`;
 
   try{
-    const res = await fetch('https://api.anthropic.com/v1/messages', {
-      method:'POST',
-      headers:{
-        'content-type':'application/json',
-        'x-api-key': key,
-        'anthropic-version':'2023-06-01',
-        'anthropic-dangerous-direct-browser-access':'true',
-      },
-      body: JSON.stringify({ model: modelEl.value, max_tokens: 1024, system, messages:[{role:'user', content: prompt}] }),
-    });
-    const data = await res.json().catch(()=>null);
-    if(!res.ok){
-      const em = data && data.error && data.error.message ? data.error.message : `HTTP ${res.status}`;
-      throw new Error(res.status === 401 ? 'APIキーが正しくありません。' : `API エラー: ${em}`);
-    }
-    const text = (data.content||[]).filter(c=>c.type==='text').map(c=>c.text).join('');
-    const json = JSON.parse(text.slice(text.indexOf('{'), text.lastIndexOf('}')+1));
+    const json = (await Kit.ai.ask({ system, prompt, json: true, maxTokens: 1024 })).json || {};
     const body = lines.join('');
     const elements = {};
     let total = 0;
@@ -588,9 +562,7 @@ async function extract(){
     setEpisode({ id: 0, custom: true, title, parts:{intro:lines[0], development:lines[1], conclusion:lines[2]}, elements });
     setMsg(`✅ ${total}個のトーク要素を抜き出しました。下の欄から選んでください。`);
   }catch(err){
-    const m = err instanceof SyntaxError ? '応答の読み取りに失敗しました。もう一度試してください。'
-      : (err && err.message === 'Failed to fetch') ? 'API に接続できませんでした。通信環境を確認してください。'
-      : (err && err.message) || '不明なエラーが発生しました。';
+    const m = (err && err.message) || '不明なエラーが発生しました。';
     setMsg(m, true);
   }finally{
     btn.disabled = (S.phase === 'playing' || S.phase === 'paused');

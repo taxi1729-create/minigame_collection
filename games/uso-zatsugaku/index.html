@@ -120,10 +120,10 @@ mark.ml{background:color-mix(in srgb,var(--k-pink) 22%,transparent);color:inheri
     <div class="k-panel" id="aiPanel">
       <span class="k-tag">AIの問題</span>
       <div class="ai-box" id="aiOn" hidden>
-        <label for="aiChk">AIで新しい問題を5問混ぜる</label>
+        <label for="aiChk">AIで新しい問題を5問混ぜる <small id="aiWho" class="k-dim"></small></label>
         <input type="checkbox" id="aiChk">
       </div>
-      <p class="k-hint" id="aiOff" hidden>タイトルの設定変更でClaude APIキーを入れると使えます。</p>
+      <p class="k-hint" id="aiOff" hidden>タイトルの「設定変更」で、使用するAIのAPIキーを入れると使えます。</p>
     </div>
     <button class="k-btn k-btn--primary k-btn--big k-btn--block" id="btnStart" data-se="start">ゲームスタート</button>
   </section>
@@ -209,7 +209,7 @@ function valid(q){
     && q.diff[0] && q.diff[1] && q.truth.includes(q.diff[0]) && q.lie.includes(q.diff[1]);
 }
 const partyPlayers = () => Kit.players(clamp(Kit.settings.get().partySize, 1, 8));
-const hasKey = () => !!(Kit.settings.get().keys.claude || '').trim();
+const hasKey = () => Kit.ai.current().ready; // タイトルで選んだAI（Claude / Gemini）
 
 /* S.qs: [{ id, cat, truth, lie, diff, note, isLie, ai? }]
    S.ans: いまの問題の回答（セーブしない）, S.last: 正解発表中の回答 */
@@ -234,6 +234,7 @@ function drawStart(){
   $('lapsHint').textContent = `${S.laps}周 ＝ 全${S.laps*PER_LAP}問`;
   const k = hasKey();
   $('aiOn').hidden = !k; $('aiOff').hidden = k;
+  { const c = Kit.ai.current(); $('aiWho').textContent = `（${c.label}：${c.model}）`; }
   $('aiChk').checked = k && !!Kit.store.get(ID + '.ai', false);
 }
 $('laps').addEventListener('click', e => {
@@ -285,7 +286,6 @@ $('btnStart').addEventListener('click', async () => {
 
 /* ---------- AIの問題 ---------- */
 async function generateAI(n){
-  const key = (Kit.settings.get().keys.claude || '').trim();
   const avoid = shuffle(BANK.slice()).slice(0, 25).map(q => q.truth).join('\n');
   const system = 'あなたは日本語の雑学クイズ作家です。指定のJSONだけを出力し、前置き・説明・コードブロックは書きません。';
   const prompt = `「ホントかウソか」を当てる雑学クイズを${n}問作ってください。
@@ -301,17 +301,10 @@ ${avoid}
 
 出力形式（このJSONのみ）:
 {"questions":[{"cat":"...","truth":"...","lie":"...","diff":["...","..."],"note":"..."}]}`;
-  const ctl = new AbortController(); const tm = setTimeout(() => ctl.abort(), 45000);
+  const ctl = new AbortController(); const tm = setTimeout(() => ctl.abort(), 60000);
   try{
-    const res = await fetch('https://api.anthropic.com/v1/messages', {
-      method:'POST', signal: ctl.signal,
-      headers:{ 'content-type':'application/json', 'x-api-key': key, 'anthropic-version':'2023-06-01', 'anthropic-dangerous-direct-browser-access':'true' },
-      body: JSON.stringify({ model:'claude-sonnet-5-5', max_tokens: 2048, system, messages:[{ role:'user', content: prompt }] }),
-    });
-    const data = await res.json().catch(() => null);
-    if(!res.ok) throw new Error(res.status === 401 ? 'APIキーが正しくありません' : 'AIの呼び出しに失敗しました');
-    const text = ((data && data.content) || []).filter(c => c.type === 'text').map(c => c.text).join('');
-    const json = JSON.parse(text.slice(text.indexOf('{'), text.lastIndexOf('}') + 1));
+    const r = await Kit.ai.ask({ system, prompt, json: true, maxTokens: 2048, signal: ctl.signal });
+    const json = r.json || {};
     const stamp = Date.now().toString(36);
     return (Array.isArray(json.questions) ? json.questions : []).map((q,i) => ({
       id: `ai-${stamp}-${i}`, ai: true,
@@ -319,9 +312,7 @@ ${avoid}
       diff: Array.isArray(q.diff) ? q.diff.map(s => String(s)) : [], note: String(q.note || '').trim().slice(0, 80),
     })).filter(valid).slice(0, n);
   }catch(err){
-    if(err instanceof SyntaxError) throw new Error('AIの答えを読み取れませんでした');
     if(err && err.name === 'AbortError') throw new Error('AIの応答が時間切れでした');
-    if(err instanceof TypeError) throw new Error('AIに接続できませんでした');
     throw err;
   }finally{ clearTimeout(tm); }
 }

@@ -51,10 +51,11 @@ function renderAiTransformAction(container, topic, prevRecord, onComplete, onRes
 
     const prompt = `以下のお題と、プレイヤーの表現をもとに、尖った・哲学的・詩的・または誇張した視点で1〜2文に言い換えてください。ユーモアや皮肉を含めてOKです。言い換えた文章のみ返してください。余分な説明は不要です。\n\nお題：${topic}\nプレイヤーの表現：${userInput}`;
 
-    const text = await callGemini(prompt);
-    resultText = text || `（${userInput}）※API未設定のためそのまま表示`;
+    const text = await callAI(prompt);
+    resultText = text || `（${userInput}）※AIが使えないためそのまま表示`;
 
-    resultBox.innerHTML = `<p class="ai-text">${resultText}</p>`;
+    resultBox.innerHTML = '';
+    const pEl = document.createElement('p'); pEl.className = 'ai-text'; pEl.textContent = resultText; resultBox.appendChild(pEl);
     convertBtn.textContent = '再変換する';
     convertBtn.disabled = false;
 

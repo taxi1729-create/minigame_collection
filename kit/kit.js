@@ -57,20 +57,24 @@ function onChange(fn){ listeners.add(fn); return () => listeners.delete(fn); }
 
 /* ---------- 設定（端末ごと。同期しない） ---------- */
 const URL_PLAYERS = (() => { try{ const n = parseInt(new URLSearchParams(location.search).get('players'), 10); return n >= 1 && n <= 8 ? n : 0; }catch(e){ return 0; } })();
-const SETTINGS_DEFAULT = { volume: 0.7, muted: false, partySize: 3, keys: { claude:'', gemini:'' } };
+const SETTINGS_DEFAULT = { volume: 0.7, muted: false, partySize: 3, aiProvider: '', keys: { claude:'', gemini:'' }, models: { claude:'claude-sonnet-5-5', gemini:'gemini-3.8-flash' } };
 const settings = {
   get(){
     const s = store.get('settings', {});
-    const out = Object.assign({}, SETTINGS_DEFAULT, s, { keys: Object.assign({}, SETTINGS_DEFAULT.keys, s.keys||{}) });
+    const out = Object.assign({}, SETTINGS_DEFAULT, s, { keys: Object.assign({}, SETTINGS_DEFAULT.keys, s.keys||{}), models: Object.assign({}, SETTINGS_DEFAULT.models, s.models||{}) });
+    // 使うAIが未選択なら、キーが入っている方（両方なら Claude）
+    if(out.aiProvider !== 'claude' && out.aiProvider !== 'gemini') out.aiProvider = (!out.keys.claude && out.keys.gemini) ? 'gemini' : 'claude';
     if(URL_PLAYERS) out.partySize = URL_PLAYERS; // ?players=N で開いたページだけ人数を上書き（保存はしない）
     return out;
   },
   set(patch){
     const cur = Object.assign({}, SETTINGS_DEFAULT, store.get('settings', {}));
     cur.keys = Object.assign({}, SETTINGS_DEFAULT.keys, cur.keys||{});
-    const prevKeys = cur.keys;
+    cur.models = Object.assign({}, SETTINGS_DEFAULT.models, cur.models||{});
+    const prevKeys = cur.keys, prevModels = cur.models;
     const next = Object.assign(cur, patch);
     if(patch.keys) next.keys = Object.assign({}, prevKeys, patch.keys);
+    if(patch.models) next.models = Object.assign({}, prevModels, patch.models);
     store.set('settings', next);
     if('volume' in patch || 'muted' in patch) SE._apply();
     listeners.forEach(fn => { try{ fn('settings'); }catch(e){} });
@@ -293,6 +297,129 @@ const Cloud = (() => {
   };
 })();
 
+/* =========================================================
+   AI（Claude / Gemini）共通呼び出し
+   - 使うAIは設定の aiProvider（'claude' | 'gemini'）
+   - キーとモデル名は設定の keys / models（手入力）
+   Kit.ai.ask({ system, prompt, maxTokens, search, json, signal })
+     → { text, json, sources:Set<url>, provider, model }
+   失敗時は Kit.ai.Error（message は画面にそのまま出せる日本語、detail は技術情報）
+   ========================================================= */
+const AI_DEFAULT_MODELS = { claude: 'claude-sonnet-5-5', gemini: 'gemini-3.8-flash' };
+const AI_LABEL = { claude: 'Claude', gemini: 'Gemini' };
+class AIError extends Error{ constructor(msg, detail, status){ super(msg); this.detail = detail || ''; this.status = status || 0; } }
+const ai = (() => {
+  function current(){
+    const s = settings.get();
+    const provider = s.aiProvider === 'gemini' ? 'gemini' : 'claude';
+    const key = (s.keys[provider] || '').trim();
+    const model = ((s.models || {})[provider] || '').trim() || AI_DEFAULT_MODELS[provider];
+    return { provider, key, model, label: AI_LABEL[provider], ready: !!key };
+  }
+  function httpErr(status, msg){
+    msg = msg || '';
+    if(status === 401 || status === 403) return new AIError('APIキーが正しくないようです（設定変更で確認してください）', `HTTP ${status} ${msg}`, status);
+    if(status === 404) return new AIError('モデル名が見つかりません（設定変更のモデル名を確認してください）', `HTTP ${status} ${msg}`, status);
+    if(status === 429) return new AIError('AIの利用上限か、混み合っています。少し待ってください', `HTTP ${status} ${msg}`, status);
+    if(status === 400 && /credit|billing|balance|quota/i.test(msg)) return new AIError('APIの残高・請求設定を確認してください', msg, status);
+    if(status === 400 && /model/i.test(msg)) return new AIError('モデル名が使えないようです（設定変更のモデル名を確認してください）', msg, status);
+    return new AIError('AIでエラーが起きました', `HTTP ${status} ${msg}`, status);
+  }
+  async function post(url, headers, body, signal){
+    let res;
+    try{ res = await fetch(url, { method: 'POST', headers, body: JSON.stringify(body), signal }); }
+    catch(e){
+      if(e && e.name === 'AbortError') throw e;
+      throw new AIError('AIにつながりませんでした。ネット接続を確認してください', e && e.message);
+    }
+    const data = await res.json().catch(() => null);
+    if(!res.ok){
+      const m = data && data.error && (data.error.message || data.error.status) || '';
+      throw httpErr(res.status, typeof m === 'string' ? m : JSON.stringify(m));
+    }
+    if(!data) throw new AIError('AIの返答を読めませんでした', 'empty body');
+    return data;
+  }
+  function parseJson(text){
+    const t = String(text || '').replace(/```(?:json)?/gi, '');
+    const ia = t.indexOf('{'), ib = t.lastIndexOf('}'), ja = t.indexOf('['), jb = t.lastIndexOf(']');
+    const useArr = ja >= 0 && (ia < 0 || ja < ia);
+    const a = useArr ? ja : ia, b = useArr ? jb : ib;
+    if(a < 0 || b <= a) throw new AIError('AIの返答の形がおかしかったので、もう一度試してください', 'JSONが見つかりません');
+    try{ return JSON.parse(t.slice(a, b + 1)); }
+    catch(e){ throw new AIError('AIの返答の形がおかしかったので、もう一度試してください', e.message); }
+  }
+
+  async function claude(c, o){
+    const headers = { 'content-type': 'application/json', 'x-api-key': c.key, 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true' };
+    const messages = [{ role: 'user', content: o.prompt }];
+    const body = { model: c.model, max_tokens: o.maxTokens || 2000, messages };
+    if(o.system) body.system = o.system;
+    if(o.search) body.tools = [{ type: 'web_search_20250305', name: 'web_search', max_uses: 8, user_location: { type: 'approximate', country: 'JP', timezone: 'Asia/Tokyo' } }];
+    const sources = new Set();
+    let data = null, text = '';
+    for(let turn = 0; turn < 4; turn++){
+      data = await post('https://api.anthropic.com/v1/messages', headers, body, o.signal);
+      const content = Array.isArray(data.content) ? data.content : [];
+      let lastTool = -1;
+      content.forEach((b, i) => {
+        if(b.type === 'web_search_tool_result'){ lastTool = i; if(Array.isArray(b.content)) b.content.forEach(r => { if(r && r.url) sources.add(r.url); }); }
+      });
+      text = content.slice(lastTool + 1).filter(b => b.type === 'text').map(b => b.text).join('');
+      if(data.stop_reason === 'pause_turn'){ messages.push({ role: 'assistant', content }); continue; }
+      break;
+    }
+    if(data && data.stop_reason === 'max_tokens' && o.json) throw new AIError('AIの返答が長すぎて途中で切れました。もう一度試してください', 'max_tokens');
+    return { text, sources };
+  }
+
+  async function gemini(c, o){
+    const headers = { 'content-type': 'application/json', 'x-goog-api-key': c.key };
+    const sources = new Set();
+    const viaGenerate = async () => {
+      const body = { contents: [{ role: 'user', parts: [{ text: o.prompt }] }], generationConfig: { maxOutputTokens: o.maxTokens || 2000 } };
+      if(o.system) body.systemInstruction = { parts: [{ text: o.system }] };
+      if(o.search) body.tools = [{ google_search: {} }];
+      const data = await post(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(c.model)}:generateContent`, headers, body, o.signal);
+      const cand = (data.candidates || [])[0];
+      if(!cand) throw new AIError('AIが返答しませんでした。もう一度試してください', 'candidates が空');
+      (((cand.groundingMetadata || {}).groundingChunks) || []).forEach(g => { if(g.web && g.web.uri) sources.add(g.web.uri); });
+      return ((cand.content && cand.content.parts) || []).map(p => p.text || '').join('');
+    };
+    const viaInteractions = async () => {
+      const body = { model: c.model, input: o.prompt };
+      if(o.system) body.system_instruction = o.system;
+      if(o.search) body.tools = [{ type: 'google_search' }];
+      const data = await post('https://generativelanguage.googleapis.com/v1beta/interactions', headers, body, o.signal);
+      if(data.status && data.status !== 'completed' && ['failed', 'cancelled', 'incomplete'].includes(data.status))
+        throw new AIError('AIの生成が途中で止まりました。もう一度試してください', (data.errors || []).map(e => e.message).join(' / ') || data.status);
+      let t = '';
+      const steps = Array.isArray(data.steps) ? data.steps : Array.isArray(data.outputs) ? data.outputs : [];
+      steps.forEach(s => {
+        const cs = Array.isArray(s && s.content) ? s.content : (s && s.type === 'text' ? [s] : []);
+        cs.forEach(x => { if(x && x.type === 'text' && typeof x.text === 'string'){ t += x.text; (x.annotations || []).forEach(a => { if(a && a.url) sources.add(a.url); }); } });
+      });
+      return t;
+    };
+    // 通常は generateContent。使えない場合（404）は Interactions API で再試行
+    let text;
+    try{ text = await viaGenerate(); }
+    catch(e){ if(!(e instanceof AIError) || e.status !== 404) throw e; text = await viaInteractions(); }
+    return { text, sources };
+  }
+
+  async function ask(o = {}){
+    const c = current();
+    if(!c.key) throw new AIError(`使用するAI（${c.label}）のAPIキーが未設定です。タイトルの「設定変更」で入れてください`, 'no key');
+    const r = c.provider === 'gemini' ? await gemini(c, o) : await claude(c, o);
+    if(!r.text) throw new AIError('AIが返答しませんでした。もう一度試してください', 'empty text');
+    const out = { text: r.text, sources: r.sources, provider: c.provider, model: c.model };
+    if(o.json) out.json = parseJson(r.text);
+    return out;
+  }
+  return { ask, current, parseJson, Error: AIError, DEFAULT_MODELS: AI_DEFAULT_MODELS, LABEL: AI_LABEL };
+})();
+
 /* ---------- 書き出し / 読み込み（手動バックアップ） ---------- */
 function exportData(){ return JSON.stringify(DOC, null, 1); }
 function importData(text){
@@ -448,5 +575,5 @@ document.addEventListener('pointerdown', () => SE.unlock(), {once:true});
 window.Kit = { SE, store, save, load, saveInfo, clearSave, best, toast, confirm: confirmBox,
   celebrate, fail, shake, screen, mount, goHome, persist, ICON,
   settings, profile, players, mainName, record, records, deleteRecords, newGroup,
-  cloud: Cloud, onChange, exportData, importData, _mergeDocs: mergeDocs };
+  cloud: Cloud, onChange, ai, exportData, importData, _mergeDocs: mergeDocs };
 })();

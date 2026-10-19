@@ -227,8 +227,6 @@ const ID = 'doubt-news';
 const CACHE_KEY = 'doubtNews.cache';
 const DAY = 24*60*60*1000;
 const PER_LAP = 3;
-const CLAUDE_MODEL = 'claude-sonnet-5-5';
-const GEMINI_MODEL = 'gemini-3.8-flash';
 const LETTERS = ['A','B','C','D'];
 const $ = id => document.getElementById(id);
 const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -257,8 +255,8 @@ Kit.mount({ id: ID, title: 'ダウトニュース', onSave: () => {
   return snap;
 }});
 
-const keys = () => { const k = Kit.settings.get().keys || {}; return { claude: String(k.claude||'').trim(), gemini: String(k.gemini||'').trim() }; };
-const hasKey = () => { const k = keys(); return !!(k.claude || k.gemini); };
+// AIはタイトルの「設定変更」で選んだもの（Kit.ai）を使う
+const hasKey = () => Kit.ai.current().ready;
 
 /* =========================================================
    キャッシュ
@@ -343,104 +341,18 @@ Web検索を使い、この時刻から過去24時間以内に報じられたニ
   return { system, prompt };
 }
 
-function parseJson(text){
-  if(!text) throw new NewsError('JSONが壊れていました', 'AIの返答が空でした');
-  let t = String(text).replace(/```(?:json)?/gi, '');
-  const a = t.indexOf('{'), b = t.lastIndexOf('}');
-  if(a < 0 || b <= a) throw new NewsError('JSONが壊れていました', 'AIの返答にJSONがありませんでした');
-  try{ return JSON.parse(t.slice(a, b+1)); }
-  catch(e){ throw new NewsError('JSONが壊れていました', e.message); }
-}
-
-function httpError(status, msg){
-  if(status === 401 || status === 403) return new NewsError('APIキーが正しくないようです', `HTTP ${status} ${msg||''}`);
-  if(status === 429) return new NewsError('APIの利用上限か、混み合っています。少し待ってください', `HTTP ${status} ${msg||''}`);
-  if(status === 400 && /credit|billing|balance/i.test(msg||'')) return new NewsError('APIの残高・請求設定を確認してください', msg);
-  return new NewsError('APIでエラーが起きました', `HTTP ${status} ${msg||''}`);
-}
-async function post(url, headers, body, signal){
-  let res;
-  try{ res = await fetch(url, { method:'POST', headers, body: JSON.stringify(body), signal }); }
+/* 選択中のAI（Claude / Gemini）のWeb検索でニュースを集める */
+async function fetchNews(nQ, exclude, signal){
+  const { system, prompt } = buildPrompt(nQ, exclude);
+  let r;
+  try{ r = await Kit.ai.ask({ system, prompt, search: true, json: true, maxTokens: 8000, signal }); }
   catch(e){
     if(e && e.name === 'AbortError') throw e;
-    throw new NewsError('通信に失敗しました。電波やネット接続を確認してください', e && e.message);
+    if(e instanceof Kit.ai.Error) throw new NewsError(e.message, e.detail);
+    throw e;
   }
-  const data = await res.json().catch(() => null);
-  if(!res.ok){
-    const m = data && (data.error && (data.error.message || data.error.status)) || '';
-    const err = httpError(res.status, typeof m === 'string' ? m : JSON.stringify(m));
-    err.status = res.status; throw err;
-  }
-  if(!data) throw new NewsError('JSONが壊れていました', 'APIの応答を読めませんでした');
-  return data;
-}
-
-/* Claude: Messages API + web_search ツール（サーバ側で検索） */
-async function fetchClaude(key, nQ, exclude, signal){
-  const { system, prompt } = buildPrompt(nQ, exclude);
-  const headers = { 'content-type':'application/json', 'x-api-key': key, 'anthropic-version':'2023-06-01', 'anthropic-dangerous-direct-browser-access':'true' };
-  const tools = [{ type:'web_search_20250305', name:'web_search', max_uses: 8, user_location:{ type:'approximate', country:'JP', timezone:'Asia/Tokyo' } }];
-  const messages = [{ role:'user', content: prompt }];
-  const searchUrls = new Set();
-  let data = null, finalText = '';
-  for(let turn=0; turn<4; turn++){
-    data = await post('https://api.anthropic.com/v1/messages', headers, { model: CLAUDE_MODEL, max_tokens: 8000, system, messages, tools }, signal);
-    const content = Array.isArray(data.content) ? data.content : [];
-    let lastTool = -1;
-    content.forEach((b, i) => {
-      if(b.type === 'web_search_tool_result'){
-        lastTool = i;
-        if(Array.isArray(b.content)) b.content.forEach(r => { if(r && r.url) searchUrls.add(r.url); });
-      }
-    });
-    // 最後の検索結果より後ろの text ブロック（引用付きで分割されていても連結すれば元の文）
-    finalText = content.slice(lastTool + 1).filter(b => b.type === 'text').map(b => b.text).join('');
-    if(data.stop_reason === 'pause_turn'){ messages.push({ role:'assistant', content }); continue; }
-    break;
-  }
-  if(data && data.stop_reason === 'max_tokens') throw new NewsError('JSONが壊れていました', '返答が長すぎて途中で切れました');
-  return { json: parseJson(finalText), searchUrls };
-}
-
-/* Gemini: Interactions API + google_search（なければ generateContent + google_search） */
-async function fetchGemini(key, nQ, exclude, signal){
-  const { system, prompt } = buildPrompt(nQ, exclude);
-  const headers = { 'content-type':'application/json', 'x-goog-api-key': key };
-  const searchUrls = new Set();
-  let text = '';
-  try{
-    const data = await post('https://generativelanguage.googleapis.com/v1beta/interactions', headers,
-      { model: GEMINI_MODEL, system_instruction: system, input: prompt, tools: [{ type:'google_search' }] }, signal);
-    if(data.status && data.status !== 'completed'){
-      const why = Array.isArray(data.errors) && data.errors.length ? data.errors.map(e => e.message).join(' / ') : `状態：${data.status}`;
-      if(['failed','cancelled','incomplete'].includes(data.status) || (Array.isArray(data.errors) && data.errors.length))
-        throw new NewsError('AIの生成が途中で止まりました。もう一度お試しください', why);
-    }
-    const steps = Array.isArray(data.steps) ? data.steps : Array.isArray(data.outputs) ? data.outputs : [];
-    steps.filter(s => s && (s.type === 'model_output' || s.type === 'text' || !s.type)).forEach(s => {
-      const cs = Array.isArray(s.content) ? s.content : (s.type === 'text' ? [s] : []);
-      cs.forEach(c => {
-        if(c && c.type === 'text' && typeof c.text === 'string'){
-          text += c.text;
-          (c.annotations||[]).forEach(a => { if(a && a.url) searchUrls.add(a.url); });
-        }
-      });
-    });
-  }catch(e){
-    if(!(e instanceof NewsError) || e.status !== 404) throw e;
-    // 旧エンドポイントでの呼び出し
-    const data = await post(`https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`, headers, {
-      systemInstruction: { parts: [{ text: system }] },
-      contents: [{ role:'user', parts: [{ text: prompt }] }],
-      tools: [{ google_search: {} }],
-    }, signal);
-    const cand = (data.candidates || [])[0];
-    if(!cand) throw new NewsError('APIでエラーが起きました', 'candidates が空でした');
-    text = ((cand.content && cand.content.parts) || []).map(p => p.text || '').join('');
-    const gm = cand.groundingMetadata || {};
-    (gm.groundingChunks || []).forEach(g => { if(g.web && g.web.uri) searchUrls.add(g.web.uri); });
-  }
-  return { json: parseJson(text), searchUrls: new Set() /* Gemini の出典はリダイレクトURLなのでホスト照合はしない */ };
+  // Gemini の出典はリダイレクトURLなので、URLのホスト照合は Claude のときだけ
+  return { json: r.json, searchUrls: r.provider === 'claude' ? r.sources : new Set() };
 }
 
 const normH = s => String(s||'').replace(/[\s　「」『』【】、。・!！?？"'“”]/g, '').toLowerCase();
@@ -485,8 +397,8 @@ function normalize(json, searchUrls, existing){
 let abortCtl = null;
 /* 必要な問題数そろうまで取得（最大3回） */
 async function ensureNews(needed, force, onStep){
-  const k = keys();
-  if(!k.claude && !k.gemini) throw new NewsError('APIキーがありません');
+  const ai = Kit.ai.current();
+  if(!ai.ready) throw new NewsError(`使用するAI（${ai.label}）のAPIキーが未設定です`);
   let c = getCache();
   if(force || !isFresh(c)) c = { fetchedAt: 0, provider: '', items: [], fakes: [], used: [] };
   for(let attempt=1; available(c) < needed && attempt <= 3; attempt++){
@@ -496,8 +408,7 @@ async function ensureNews(needed, force, onStep){
     const timer = setTimeout(() => abortCtl.abort(), 180000);
     let got;
     try{
-      got = k.claude ? await fetchClaude(k.claude, nQ, c.items.map(x => x.h), abortCtl.signal)
-                     : await fetchGemini(k.gemini, nQ, c.items.map(x => x.h), abortCtl.signal);
+      got = await fetchNews(nQ, c.items.map(x => x.h), abortCtl.signal);
     }finally{ clearTimeout(timer); }
     const { reals, fakes } = normalize(got.json, got.searchUrls, [...c.items, ...c.fakes].map(x => x.h));
     if(reals.length < 3 || !fakes.length){
@@ -505,7 +416,7 @@ async function ensureNews(needed, force, onStep){
       throw new NewsError('ニュースの数が足りませんでした', `本物${reals.length}本・ニセ${fakes.length}本（URL付きの本物が3本以上必要）`);
     }
     if(!c.fetchedAt) c.fetchedAt = Date.now();
-    c.provider = k.claude ? 'claude' : 'gemini';
+    c.provider = ai.provider;
     c.items.push(...reals); c.fakes.push(...fakes);
     Kit.store.set(CACHE_KEY, c);
   }
@@ -529,7 +440,7 @@ function drawSetup(){
   $('lapsHint').textContent = `1周＝3問。${S.laps}周で全${S.laps*PER_LAP}問です。`;
   const c = getCache(), need = S.laps*PER_LAP;
   if(!hasKey()){
-    $('newsBox').innerHTML = `<div class="warn">ニュースの取得にはAPIキーが必要です。タイトルの「設定変更」で Claude か Gemini のキーを入れてください。</div>
+    $('newsBox').innerHTML = `<div class="warn">ニュースの取得にはAIのAPIキーが必要です。いま使うAIは ${esc(Kit.ai.current().label)} です。タイトルの「設定変更」でキーを入れてください。</div>
       <div class="btnrow"><a class="k-btn k-btn--teal k-btn--sm" href="../../index.html#settings">設定変更を開く</a>
       <button class="k-btn k-btn--yellow k-btn--sm" id="btnPractice" type="button">練習モード（サンプルニュース）</button></div>
       <p class="k-hint">練習モードは架空のサンプル3問（1周）で遊べます。</p>`;
@@ -537,7 +448,7 @@ function drawSetup(){
     return;
   }
   $('btnStart').disabled = false;
-  const k = keys(), via = k.claude ? 'Claude' : 'Gemini';
+  const cur = Kit.ai.current(), via = `${cur.label}（${cur.model}）`;
   if(isFresh(c)){
     const av = available(c);
     $('newsBox').innerHTML = `<p class="newsinfo">ニュース：${esc(fmtTime(c.fetchedAt))}に取得（${esc(leftText(c.fetchedAt))}）

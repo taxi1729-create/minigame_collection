@@ -215,6 +215,18 @@ details.k-more summary{cursor:pointer;font-weight:900;font-size:13px;color:var(-
 .sheet .savenote{font-size:13px;font-weight:900;color:var(--k-pink);margin:0 0 10px}
 .sheet .who{font-size:13px;font-weight:900;color:var(--k-ink2);margin:0 0 12px;line-height:1.5}
 footer.hub-foot{text-align:center;color:var(--k-ink2);font-size:12px;padding:0 16px 40px}
+/* ---- AI選択 ---- */
+.ai-pick{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.ai-pick button{min-height:52px;border:3px solid var(--k-ink);border-radius:12px;background:var(--k-label);box-shadow:var(--k-shadow);
+  font-family:var(--k-display);font-size:19px;color:var(--k-ink);transition:transform .08s, box-shadow .08s}
+.ai-pick button[aria-checked="true"]{background:var(--k-teal);color:#fff}
+.ai-pick button:active{transform:translate(4px,4px);box-shadow:0 0 0 var(--k-ink)}
+.ai-now{margin:8px 0 0;font-weight:900;font-size:14px}
+.ai-now.is-warn{color:var(--k-pink)}
+.ai-box{border:3px dashed color-mix(in srgb,var(--k-ink) 35%,transparent);border-radius:12px;padding:10px 12px 12px;margin-top:12px}
+.ai-box.is-on{border-style:solid;border-color:var(--k-teal);background:color-mix(in srgb,var(--k-teal) 8%,var(--k-label))}
+.ai-box__name{display:block;font-family:var(--k-display);font-weight:400;font-size:17px}
+.ai-box .k-label{margin-top:8px}
 </style>
 </head>
 <body class="kit">
@@ -289,22 +301,36 @@ footer.hub-foot{text-align:center;color:var(--k-ink2);font-size:12px;padding:0 1
       </div>
 
       <div class="k-panel set">
-        <span class="k-tag">AIのAPIキー</span>
+        <span class="k-tag">AI</span>
         <div class="field">
-          <label class="k-label" for="sClaude">Claude APIキー</label>
+          <span class="k-label" id="aiPickLabel">使用するAI</span>
+          <div class="ai-pick" role="radiogroup" aria-labelledby="aiPickLabel">
+            <button type="button" role="radio" data-ai="claude" data-se="select">Claude</button>
+            <button type="button" role="radio" data-ai="gemini" data-se="select">Gemini</button>
+          </div>
+          <p class="ai-now" id="aiNow" aria-live="polite"></p>
+        </div>
+        <div class="ai-box" data-box="claude">
+          <b class="ai-box__name">Claude</b>
+          <label class="k-label" for="sClaude">APIキー</label>
           <div class="inline">
             <input class="k-input" id="sClaude" type="password" autocomplete="off" spellcheck="false" placeholder="sk-ant-…">
             <button class="sq" type="button" data-reveal="sClaude" aria-label="キーを表示" aria-pressed="false"></button>
           </div>
+          <label class="k-label" for="mClaude">モデル名</label>
+          <input class="k-input" id="mClaude" type="text" autocomplete="off" spellcheck="false" autocapitalize="off" placeholder="claude-sonnet-5-5">
         </div>
-        <div class="field">
-          <label class="k-label" for="sGemini">Gemini APIキー</label>
+        <div class="ai-box" data-box="gemini">
+          <b class="ai-box__name">Gemini</b>
+          <label class="k-label" for="sGemini">APIキー</label>
           <div class="inline">
             <input class="k-input" id="sGemini" type="password" autocomplete="off" spellcheck="false" placeholder="AIza…">
             <button class="sq" type="button" data-reveal="sGemini" aria-label="キーを表示" aria-pressed="false"></button>
           </div>
+          <label class="k-label" for="mGemini">モデル名</label>
+          <input class="k-input" id="mGemini" type="text" autocomplete="off" spellcheck="false" autocapitalize="off" placeholder="gemini-3.8-flash">
         </div>
-        <p class="k-hint">この端末にだけ保存されます（クラウドセーブにも含まれません）。AIを使うゲームで使います。</p>
+        <p class="k-hint">AIを使うゲームは、ここで選んだAIとモデルで動きます。キーはこの端末にだけ保存されます（クラウドセーブにも含まれません）。</p>
       </div>
 
       <div class="k-panel set">
@@ -346,6 +372,7 @@ const esc = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>'
 const RM = matchMedia('(prefers-reduced-motion: reduce)');
 
 const ICONS = {
+  moji:'<svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M9 39L27 21" /><path d="M24 15l9 9" /><path d="M33 9l6 6-6 3-3-3z" fill="#fffdf7"/><path d="M39 39L21 21" /><path d="M24 15l-9 9" /><path d="M15 9l-6 6 6 3 3-3z" fill="#fffdf7"/><path d="M20 42h8" /><text x="24" y="35" text-anchor="middle" font-size="11" font-weight="900" fill="currentColor" stroke="none" font-family="sans-serif">文</text></svg>',
   uso:'<svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="9" width="36" height="26" rx="6" fill="#fffdf7"/><path d="M14 35l-3 7 9-7"/><path d="M15 22l4 4 7-8"/><path d="M30 18l6 8M36 18l-6 8"/></svg>',
   news:'<svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M7 10h28v28H11a4 4 0 0 1-4-4z" fill="#fffdf7"/><path d="M35 16h6v18a4 4 0 0 1-4 4h-2"/><path d="M12 16h18M12 22h10M12 28h10"/><circle cx="31" cy="30" r="6" fill="#ff4fa3"/><path d="M31 27v3.5M31 33h.01" stroke="#fffdf7"/></svg>',
   aimai:'<svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M8 12h22a6 6 0 0 1 6 6v6a6 6 0 0 1-6 6H18l-7 6v-6H8z" fill="#fffdf7"/><path d="M17 17.5a4 4 0 1 1 5 3.9c-1 .3-1.5 1-1.5 2v.6"/><circle cx="20.5" cy="27" r=".8" fill="currentColor"/><path d="M34 22h4a4 4 0 0 1 4 4v4a4 4 0 0 1-4 4h-1v4l-5-4" fill="#fffdf7"/></svg>',
@@ -393,6 +420,10 @@ const GAMES = [
    score:{dir:1, f:v=>`${v}問正解`},
    desc:'直近24時間の世界と日本のニュース4本のうち、1本だけがニセモノ。どれがウソかを見抜け。',
    how:['何周するか決める（1周＝3問）','4本のニュースから、ニセニュースだと思うものを選ぶ','見破れたら1ポイント。ニュースはAPIキーで最新のものを取得']},
+  {id:'moji-battler', icon:'moji', color:'c-yellow', group:'party', name:'文字バトラー', min:1, max:4, rec:[2,4],
+   score:{dir:1, f:v=>`残りHP${v}`},
+   desc:'5つの言葉でキャラを作り、AIの実況つきで対決。最後まで立っていた者が勝ち。',
+   how:['キャラ名・見た目・性格・武器・能力を各6文字まで入力','AIがキャラを作るあいだに次の人が入力（1人なら敵キャラと対決）','入場→対峙→実況バトル。最後まで生き残れば勝ち']},
   {id:'pitatto', icon:'pita', color:'c-pink', group:'solo', name:'ピタッと10秒', min:1, max:1,
    score:{dir:-1, f:v=>`誤差${Number(v).toFixed(2)}秒`},
    desc:'途中から見えなくなるストップウォッチを、ちょうど10.00秒で止める。',
@@ -796,16 +827,38 @@ $('sMute').addEventListener('click', () => {
   Kit.toast(Kit.SE.muted ? '効果音オフ' : '効果音オン', 900);
 });
 
-// APIキー
+// AI：使用するAI・APIキー・モデル名
+function drawAI(){
+  const c = Kit.ai.current();
+  document.querySelectorAll('.ai-pick [data-ai]').forEach(b => b.setAttribute('aria-checked', String(b.dataset.ai === c.provider)));
+  document.querySelectorAll('.ai-box').forEach(b => b.classList.toggle('is-on', b.dataset.box === c.provider));
+  $('aiNow').textContent = c.ready ? `いま使うAI：${c.label}（${c.model}）` : `いま使うAI：${c.label}（${c.model}）— APIキーが未設定です`;
+  $('aiNow').classList.toggle('is-warn', !c.ready);
+}
+document.querySelector('.ai-pick').addEventListener('click', e => {
+  const b = e.target.closest('[data-ai]'); if(!b) return;
+  Kit.settings.set({ aiProvider: b.dataset.ai }); drawAI();
+  Kit.toast(`${Kit.ai.current().label} を使います`, 1000);
+});
 [['sClaude','claude'],['sGemini','gemini']].forEach(([el, k]) => {
   const inp = $(el);
   inp.value = Kit.settings.get().keys[k] || '';
   inp.addEventListener('change', () => {
-    // 片方だけ渡すともう片方が消えることがあるので、両方まとめて渡す
-    Kit.settings.set({keys: Object.assign({}, Kit.settings.get().keys, {[k]: inp.value.trim()})});
+    Kit.settings.set({ keys: { [k]: inp.value.trim() } }); drawAI();
     Kit.toast(inp.value.trim() ? 'キーを保存しました' : 'キーを消しました', 1100);
   });
 });
+[['mClaude','claude'],['mGemini','gemini']].forEach(([el, k]) => {
+  const inp = $(el);
+  inp.value = Kit.settings.get().models[k] || '';
+  inp.addEventListener('change', () => {
+    const v = inp.value.trim() || Kit.ai.DEFAULT_MODELS[k];
+    inp.value = v;
+    Kit.settings.set({ models: { [k]: v } }); drawAI();
+    Kit.toast('モデル名を保存しました', 1100);
+  });
+});
+drawAI();
 document.querySelectorAll('[data-reveal]').forEach(b => {
   const inp = $(b.dataset.reveal);
   const draw = () => { const shown = inp.type === 'text'; b.innerHTML = shown ? UI.eyeOff : UI.eye; b.setAttribute('aria-pressed', String(shown)); b.setAttribute('aria-label', shown ? 'キーを隠す' : 'キーを表示'); };
@@ -956,7 +1009,7 @@ function renderAll(){
   if(a && a.matches && a.matches('input[type=text], input:not([type]), input[type=password], textarea')){ pendingRender = true; return; }
   pendingRender = false;
   drawSnd(); drawSound(); drawRange(); renderNames(); renderPartyShelves(); renderSolo();
-  fillMain(); renderFriends(); renderCloud(); renderStats();
+  fillMain(); renderFriends(); renderCloud(); renderStats(); if(typeof drawAI === 'function') drawAI();
 }
 let pendingRender = false;
 document.addEventListener('focusout', () => setTimeout(() => { if(pendingRender) renderAll(); }, 0));

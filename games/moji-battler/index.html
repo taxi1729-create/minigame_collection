@@ -1,0 +1,747 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>文字バトラー | あそびばこ</title>
+<link rel="stylesheet" href="../../kit/kit.css">
+<style>
+:root{ --f0:#ff4fa3; --f1:#00a3a1; --f2:#e8a600; --f3:#3a6fe0; }
+.fc0{--fc:var(--f0)} .fc1{--fc:var(--f1)} .fc2{--fc:var(--f2)} .fc3{--fc:var(--f3)}
+
+/* ---- 開始 ---- */
+.members{display:flex;flex-wrap:wrap;gap:6px}
+.ai-line{font-weight:900;font-size:14px;margin:0}
+.ai-line.warn{color:var(--k-pink)}
+
+/* ---- 入力 ---- */
+.entry-head{display:flex;align-items:center;gap:10px}
+.entry-head .who{font-family:var(--k-display);font-size:24px;line-height:1.2}
+.dot{width:16px;height:16px;border-radius:50%;background:var(--fc);border:3px solid var(--k-ink);flex:none}
+.fields{display:grid;gap:10px;margin-top:6px}
+.fld{display:grid;grid-template-columns:76px 1fr 38px;gap:8px;align-items:center}
+.fld label{font-weight:900;font-size:14px}
+.fld .k-input{font-size:18px;padding:8px 10px}
+.fld .cnt{font-size:12px;font-weight:900;color:var(--k-ink2);text-align:right;font-variant-numeric:tabular-nums}
+.fld .cnt.over{color:var(--k-pink)}
+.gen-list{display:grid;gap:6px;margin:0;padding:0;list-style:none}
+.gen-list li{display:flex;align-items:center;gap:8px;font-weight:900;font-size:14px}
+.gen-list .st{margin-left:auto;font-size:12px;border:2px solid var(--k-ink);border-radius:999px;padding:0 8px;background:var(--k-label2)}
+.gen-list .st.ok{background:var(--k-teal);color:#fff}
+.gen-list .st.ng{background:var(--k-pink);color:#fff}
+.spin{width:14px;height:14px;border-radius:50%;border:3px solid color-mix(in srgb,var(--k-ink) 25%,transparent);border-top-color:var(--k-pink);animation:spin .8s linear infinite;flex:none}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* ---- キャラカード ---- */
+.cc{position:relative;background:var(--k-label);border:4px solid var(--k-ink);border-radius:16px;box-shadow:6px 6px 0 var(--fc);padding:14px 14px 12px;overflow:hidden}
+.cc::before{content:"";position:absolute;inset:0 0 auto 0;height:10px;background:var(--fc)}
+.cc .owner{font-size:12px;font-weight:900;color:var(--k-ink2);margin-top:4px}
+.cc .nm{font-family:var(--k-display);font-size:clamp(28px,9vw,38px);line-height:1.15;margin:2px 0 0;overflow-wrap:anywhere}
+.cc .ttl{display:inline-block;margin-top:4px;font-weight:900;font-size:13px;background:var(--fc);color:#fff;border:2px solid var(--k-ink);border-radius:999px;padding:0 10px}
+.cc dl{display:grid;grid-template-columns:52px 1fr;gap:4px 8px;margin:10px 0 0;font-size:14px}
+.cc dt{font-weight:900;color:var(--k-ink2)}
+.cc dd{margin:0}
+.cc .stats{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-top:10px}
+.cc .stats div{border:2px solid var(--k-ink);border-radius:8px;text-align:center;padding:2px 0;background:var(--k-label2)}
+.cc .stats b{display:block;font-family:var(--k-display);font-weight:400;font-size:18px;line-height:1.2}
+.cc .stats span{font-size:11px;font-weight:900;color:var(--k-ink2)}
+.cc .sp{margin-top:10px;border:2px dashed var(--fc);border-radius:10px;padding:6px 10px;font-size:14px}
+.cc .sp b{color:var(--fc)}
+.cc .quote{margin:8px 0 0;font-weight:900;font-size:15px}
+
+/* ---- 入場 ---- */
+.stage{position:relative;min-height:62vh;display:flex;flex-direction:column;justify-content:center}
+.call{font-family:var(--k-display);font-size:clamp(20px,6vw,26px);text-align:center;line-height:1.35;margin:0 0 14px;min-height:2.7em}
+.enter-l{animation:enterL .7s cubic-bezier(.2,1.3,.4,1) both}
+.enter-r{animation:enterR .7s cubic-bezier(.2,1.3,.4,1) both}
+@keyframes enterL{from{transform:translateX(-120%) rotate(-8deg);opacity:0}to{transform:none;opacity:1}}
+@keyframes enterR{from{transform:translateX(120%) rotate(8deg);opacity:0}to{transform:none;opacity:1}}
+.entered{position:absolute;top:-6px;right:-4px;transform:rotate(10deg);font-family:var(--k-display);font-size:20px;color:#fff;background:var(--k-pink);border:3px solid var(--k-ink);border-radius:10px;padding:0 10px;box-shadow:3px 3px 0 var(--k-ink);animation:stampIn .45s .55s cubic-bezier(.2,1.6,.4,1) both;z-index:2}
+@keyframes stampIn{from{transform:scale(2.4) rotate(-10deg);opacity:0}to{transform:rotate(10deg) scale(1);opacity:1}}
+
+/* ---- 対峙 ---- */
+.vs-wrap{display:grid;gap:10px;align-items:center}
+.vs-wrap.n2{grid-template-columns:1fr auto 1fr}
+.vs-wrap.n3,.vs-wrap.n4{grid-template-columns:1fr 1fr}
+.vs-card{background:var(--k-label);border:4px solid var(--k-ink);border-radius:14px;box-shadow:5px 5px 0 var(--fc);padding:12px 8px;text-align:center;min-width:0}
+.vs-card .nm{font-family:var(--k-display);line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:clip}
+.vs-card .ttl{font-size:12px;font-weight:900;color:var(--k-ink2);margin-top:2px}
+.vs-card .own{font-size:12px;font-weight:900;margin-top:6px;color:var(--fc)}
+.vs-l{animation:clashL .9s cubic-bezier(.3,1.4,.4,1) both}
+.vs-r{animation:clashR .9s cubic-bezier(.3,1.4,.4,1) both}
+@keyframes clashL{0%{transform:translateX(-60%);opacity:0}60%{transform:translateX(8%)}100%{transform:none;opacity:1}}
+@keyframes clashR{0%{transform:translateX(60%);opacity:0}60%{transform:translateX(-8%)}100%{transform:none;opacity:1}}
+.vs{font-family:var(--k-display);font-size:clamp(40px,14vw,64px);color:var(--k-pink);text-shadow:3px 3px 0 var(--k-ink);animation:vsPop .6s .7s cubic-bezier(.2,1.8,.4,1) both;text-align:center}
+.vs-mid{grid-column:1/-1;text-align:center}
+@keyframes vsPop{from{transform:scale(3);opacity:0}to{transform:none;opacity:1}}
+
+/* ---- バトル ---- */
+.hud{display:grid;gap:8px}
+.hp{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:2px 8px;align-items:center;background:var(--k-label);border:3px solid var(--k-ink);border-radius:12px;padding:6px 10px;box-shadow:3px 3px 0 var(--fc)}
+.hp .nm{font-weight:900;font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.hp .num{font-family:var(--k-display);font-size:15px;font-variant-numeric:tabular-nums}
+.hp .bar{grid-column:1/-1;height:12px;border:2px solid var(--k-ink);border-radius:99px;background:var(--k-label2);overflow:hidden}
+.hp .bar i{display:block;height:100%;width:100%;background:var(--fc);transform-origin:left;transition:transform .6s cubic-bezier(.3,1,.4,1)}
+.hp.hit{animation:hit .4s}
+.hp.down{opacity:.45;filter:grayscale(1)}
+.hp.down .nm::after{content:"　ダウン";color:var(--k-pink)}
+@keyframes hit{20%,60%{transform:translateX(-5px)}40%,80%{transform:translateX(5px)}}
+.feed{display:flex;flex-direction:column;gap:8px;min-height:260px}
+.line{display:grid;grid-template-columns:auto 1fr;gap:8px;align-items:start;animation:k-in .25s ease}
+.line .who{font-size:12px;font-weight:900;color:#fff;background:var(--k-ink);border-radius:8px;padding:2px 8px;margin-top:3px;white-space:nowrap}
+.line.kaisetsu .who{background:var(--k-teal)}
+.line p{margin:0;font-weight:900;font-size:17px;line-height:1.6}
+.line.old p{font-size:14px;font-weight:700;color:var(--k-ink2)}
+.line.big p{font-family:var(--k-display);font-weight:400;font-size:22px;color:var(--k-pink)}
+.ctrl{display:grid;grid-template-columns:1fr auto;gap:10px}
+.auto[aria-pressed="true"]{background:var(--k-teal);color:#fff}
+
+/* ---- 結果 ---- */
+.win-name{font-family:var(--k-display);font-size:clamp(34px,11vw,52px);line-height:1.15;color:var(--fc);text-shadow:3px 3px 0 var(--k-ink);overflow-wrap:anywhere}
+.fin{font-weight:900;margin:6px 0 0}
+</style>
+</head>
+<body class="kit">
+<main class="k-wrap">
+
+  <!-- 開始 -->
+  <section class="k-screen is-active k-stack" id="sSetup">
+    <div class="k-panel k-panel--tape k-center">
+      <h1 class="k-h1" style="margin-top:6px">文字バトラー</h1>
+      <p style="margin:8px 0 0;font-weight:900">5つの言葉でキャラを作り、<br>AIの実況でガチンコ対決！</p>
+    </div>
+    <div class="k-panel">
+      <span class="k-tag">あそぶ人</span>
+      <div class="members" id="members" style="margin-top:8px"></div>
+      <p class="k-hint" id="memberNote"></p>
+    </div>
+    <div class="k-panel">
+      <span class="k-tag">実況の長さ</span>
+      <div class="k-seg" id="lenSeg" role="group" aria-label="実況の長さ" style="margin-top:8px">
+        <button type="button" data-v="short">短め</button>
+        <button type="button" data-v="normal">ふつう</button>
+        <button type="button" data-v="long">長め</button>
+      </div>
+      <p class="k-hint" id="lenHint"></p>
+    </div>
+    <div class="k-panel">
+      <span class="k-tag">AI</span>
+      <p class="ai-line" id="aiLine" style="margin-top:8px"></p>
+      <p class="k-hint" id="aiHint"></p>
+    </div>
+    <div class="k-panel">
+      <span class="k-tag">あそびかた</span>
+      <ol style="margin:8px 0 0;padding-left:20px;font-size:14px">
+        <li>1人ずつ「キャラ名・見た目・性格・武器・能力」を各6文字まで入力</li>
+        <li>入力が終わったら、AIがキャラを作っている間に次の人が入力</li>
+        <li>全員そろったら入場 → 対峙 → 実況つきバトル</li>
+        <li>最後まで立っていたキャラの勝ち（1人のときは敵キャラと対決）</li>
+      </ol>
+    </div>
+    <button class="k-btn k-btn--primary k-btn--big k-btn--block" id="btnStart" data-se="start">キャラを作る</button>
+  </section>
+
+  <!-- 入力 -->
+  <section class="k-screen k-stack" id="sEntry">
+    <div class="k-panel" id="entryPanel">
+      <div class="entry-head"><span class="dot" id="entryDot"></span><span class="who" id="entryWho"></span></div>
+      <p class="k-hint" id="entryStep" style="margin-top:2px"></p>
+      <form class="fields" id="entryForm" autocomplete="off"></form>
+    </div>
+    <button class="k-btn k-btn--primary k-btn--big k-btn--block" id="btnSubmit" type="submit" form="entryForm" data-se="ok">このキャラで決定</button>
+    <button class="k-btn k-btn--ghost k-btn--block k-btn--sm" id="btnRandom" type="button" data-se="pop">おまかせで埋める</button>
+    <div class="k-panel" id="genPanel" hidden>
+      <span class="k-tag">キャラ生成</span>
+      <ul class="gen-list" id="genList" style="margin-top:8px"></ul>
+    </div>
+  </section>
+
+  <!-- 生成待ち -->
+  <section class="k-screen k-stack" id="sWait">
+    <div class="k-panel k-center">
+      <h2 class="k-h2">キャラクター生成中</h2>
+      <p class="k-hint">AIがキャラを仕上げています…</p>
+    </div>
+    <div class="k-panel"><ul class="gen-list" id="waitList"></ul></div>
+    <div id="waitErr" class="k-stack" hidden>
+      <p class="k-center" style="color:var(--k-pink);font-weight:900;margin:0" id="waitErrMsg"></p>
+      <button class="k-btn k-btn--primary k-btn--block" id="btnRetryGen">もう一度生成する</button>
+      <button class="k-btn k-btn--block" id="btnLocalGen">AIなしで作る</button>
+    </div>
+  </section>
+
+  <!-- 入場 -->
+  <section class="k-screen" id="sIntro">
+    <div class="stage">
+      <p class="call" id="introCall" aria-live="polite"></p>
+      <div id="introCard"></div>
+      <button class="k-btn k-btn--primary k-btn--block" id="btnIntroNext" style="margin-top:16px" data-se="none">次へ</button>
+    </div>
+  </section>
+
+  <!-- 対峙 -->
+  <section class="k-screen k-stack" id="sVersus">
+    <p class="call" style="margin-top:20px">いざ、対峙！</p>
+    <div class="vs-wrap" id="vsWrap"></div>
+    <p class="k-center k-hint" id="vsWait" aria-live="polite"></p>
+    <button class="k-btn k-btn--primary k-btn--big k-btn--block" id="btnFight" data-se="none" disabled>対決スタート！</button>
+    <div id="vsErr" class="k-stack" hidden>
+      <p class="k-center" style="color:var(--k-pink);font-weight:900;margin:0" id="vsErrMsg"></p>
+      <button class="k-btn k-btn--block" id="btnRetryBattle">実況をもう一度作る</button>
+      <button class="k-btn k-btn--block" id="btnLocalBattle">AIなしで対決する</button>
+    </div>
+  </section>
+
+  <!-- バトル -->
+  <section class="k-screen k-stack" id="sBattle">
+    <div class="hud" id="hud"></div>
+    <div class="k-panel"><div class="feed" id="feed" aria-live="polite"></div></div>
+    <div class="ctrl">
+      <button class="k-btn k-btn--primary k-btn--block" id="btnNext" data-se="none">次へ</button>
+      <button class="k-btn auto" id="btnAuto" aria-pressed="false" data-se="none">自動</button>
+    </div>
+  </section>
+
+  <!-- 結果 -->
+  <section class="k-screen k-stack" id="sResult">
+    <div class="k-panel k-panel--tape k-center" id="resPanel">
+      <p class="k-dim" style="margin:8px 0 0">最後まで立っていたのは</p>
+      <div class="win-name" id="resName"></div>
+      <p class="fin" id="resOwner"></p>
+      <p class="k-hint" id="resFinish"></p>
+    </div>
+    <div class="k-stack" id="resCards"></div>
+    <div class="k-grid2">
+      <button class="k-btn" id="btnRematch" data-se="start">同じキャラで再戦</button>
+      <button class="k-btn k-btn--primary" id="btnNew" data-se="start">新しいキャラで</button>
+    </div>
+  </section>
+</main>
+
+<script src="../../kit/kit.js"></script>
+<script src="enemies.js"></script>
+<script>
+(() => {
+'use strict';
+const ID = 'moji-battler';
+const MAXLEN = 6;
+const FIELDS = [
+  { k:'name', label:'キャラ名', ph:'例）鉄拳タロウ' },
+  { k:'look', label:'見た目', ph:'例）金色の鎧' },
+  { k:'personality', label:'性格', ph:'例）おっちょこ' },
+  { k:'weapon', label:'武器', ph:'例）フライパン' },
+  { k:'ability', label:'能力', ph:'例）時間停止' },
+];
+const LEN = {
+  short:  { label:'短め', events:[6, 8],  hint:'6〜8行。サクッと決着' },
+  normal: { label:'ふつう', events:[10, 14], hint:'10〜14行。ほどよい盛り上がり' },
+  long:   { label:'長め', events:[18, 24], hint:'18〜24行。手に汗にぎる大熱戦' },
+};
+const RANDOM_WORDS = {
+  name: ['爆炎丸','ネコ侍','ポチ大将','月影ミオ','鉄腕アキ','どすこい','雷神ケン','プリン姫','影法師','番長ゴウ'],
+  look: ['金色の鎧','巨大な耳','三つ編み','虹色の羽','黒い仮面','白い長靴','光る目','ムキムキ','ちょんまげ','ゆるい服'],
+  personality: ['熱血','冷静','臆病','お調子者','几帳面','天然','負けず嫌い','優しい','せっかち','のんき'],
+  weapon: ['フライパン','竹刀','ハリセン','ブーメラン','傘','ギター','巨大な筆','けん玉','ヨーヨー','大根'],
+  ability: ['瞬間移動','分身','怪力','透明化','時間停止','回復','重力操作','超加速','鉄壁','雷撃'],
+};
+const $ = id => document.getElementById(id);
+const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const clampN = (v, lo, hi, d) => { const n = Math.round(+v); return isFinite(n) ? Math.max(lo, Math.min(hi, n)) : d; };
+const len = s => [...String(s || '')].length;
+const cut = (s, n) => [...String(s == null ? '' : s).replace(/\s+/g, ' ').trim()].slice(0, n).join('');
+const pick = a => a[Math.floor(Math.random() * a.length)];
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+/* =========================================================
+   状態
+   ========================================================= */
+const partyNames = () => Kit.players(clampN(Kit.settings.get().partySize, 1, 4, 1));
+const fresh = () => ({
+  phase: 'setup', players: partyNames(), length: Kit.store.get(ID + '.len', 'normal'),
+  inputs: [], chars: [], cur: 0, battle: null, shown: 0, hp: [], recorded: false, local: false, enemy: false,
+});
+let S = fresh();
+const pending = {}; // 生成中の Promise（セーブしない）
+
+Kit.mount({ id: ID, title: '文字バトラー', onSave: () => {
+  if(S.phase === 'setup' || S.phase === 'result') return null;
+  const snap = JSON.parse(JSON.stringify(S));
+  // 生成待ちのキャラは入力だけ残し、再開時に作り直す
+  snap.chars = snap.chars.map(c => c && c.ok ? c : null);
+  return snap;
+}});
+
+/* =========================================================
+   AIまわり
+   ========================================================= */
+const aiOn = () => Kit.ai.current().ready;
+const CHAR_SYSTEM = 'あなたは対戦ゲームのキャラクターデザイナーです。プレイヤーが入力した短い言葉から、オリジナルの戦うキャラクターを作ります。実在の人物・既存作品のキャラクターとして扱わず、すべて架空のキャラクターとして描写します。指定のJSONだけを出力し、前置きや説明、コードブロックは書きません。';
+function charPrompt(inp){
+  return `次の5つの言葉から、対戦用の架空のキャラクターを作ってください。
+
+キャラ名: ${inp.name}
+見た目: ${inp.look}
+性格: ${inp.personality}
+武器: ${inp.weapon}
+能力: ${inp.ability}
+
+ルール:
+- name はキャラ名をそのまま使う（変えない）
+- 5つの言葉の特徴をすべて活かし、ユーモアと迫力のあるキャラにする
+- stats は hp 80〜150、atk・def・spd は 1〜10。atk+def+spd は 15〜21 に収める（強すぎ・弱すぎにしない）
+- 文はすべて日本語。残酷・流血・差別的な表現は使わない
+
+出力形式（このJSONのみ）:
+{"name":"","title":"12文字以内の二つ名","look":"40文字以内の見た目の描写","personality":"40文字以内の性格の描写","weapon":"20文字以内","ability":"40文字以内の能力の説明","special":{"name":"15文字以内の必殺技名","desc":"40文字以内"},"stats":{"hp":100,"atk":5,"def":5,"spd":5},"quote":"25文字以内の決めゼリフ","intro":"40文字以内の入場コール（実況が叫ぶ一言）"}`;
+}
+function normalizeChar(j, inp){
+  j = j || {};
+  const st = j.stats || {};
+  let atk = clampN(st.atk, 1, 10, 5), def = clampN(st.def, 1, 10, 5), spd = clampN(st.spd, 1, 10, 5);
+  // 合計を 15〜21 に収める
+  while(atk + def + spd > 21){ if(atk >= def && atk >= spd) atk--; else if(def >= spd) def--; else spd--; }
+  while(atk + def + spd < 15){ if(atk <= def && atk <= spd) atk++; else if(def <= spd) def++; else spd++; }
+  const sp = j.special || {};
+  return {
+    name: cut(inp.name, MAXLEN) || cut(j.name, MAXLEN) || '名無し',
+    title: cut(j.title, 14) || `${cut(inp.personality, 6)}の${cut(inp.weapon, 6)}使い`,
+    input: { look: inp.look, personality: inp.personality, weapon: inp.weapon, ability: inp.ability },
+    look: cut(j.look, 50) || inp.look,
+    personality: cut(j.personality, 50) || inp.personality,
+    weapon: cut(j.weapon, 24) || inp.weapon,
+    ability: cut(j.ability, 50) || inp.ability,
+    special: { name: cut(sp.name, 18) || `${cut(inp.ability, 6)}・極`, desc: cut(sp.desc, 50) || '' },
+    stats: { hp: clampN(st.hp, 80, 150, 100), atk, def, spd },
+    quote: cut(j.quote, 30) || '',
+    intro: cut(j.intro, 50) || `${cut(inp.name, MAXLEN)}、入場！`,
+  };
+}
+// AIなしで作る（入力からそれっぽく）
+function hash(s){ let h = 2166136261; for(const ch of String(s)){ h ^= ch.codePointAt(0); h = Math.imul(h, 16777619); } return h >>> 0; }
+function localChar(inp){
+  let h = hash(Object.values(inp).join('|'));
+  const r = n => { h = Math.imul(h ^ (h >>> 15), 2246822507) >>> 0; return h % n; };
+  return normalizeChar({
+    title: `${cut(inp.personality, 6)}な${cut(inp.weapon, 6)}使い`,
+    look: `${inp.look}が目を引く戦士。`,
+    personality: `とにかく${inp.personality}。`,
+    weapon: inp.weapon,
+    ability: `${inp.ability}を使いこなす`,
+    special: { name: `${cut(inp.ability, 6)}${pick(['・極','・改','乱舞','爆発','百連'])}`, desc: `${inp.weapon}に${inp.ability}の力を込めて放つ` },
+    stats: { hp: 85 + r(60), atk: 3 + r(7), def: 3 + r(7), spd: 3 + r(7) },
+    quote: pick(['勝つのは、この私だ！','いくぞ、全力だ！','手加減はしないよ！','見せてやる、本気をな！']),
+    intro: `${inp.look}をなびかせて、${inp.name}が入場だ！`,
+  }, inp);
+}
+async function genChar(i){
+  const inp = S.inputs[i];
+  if(S.local || !aiOn()) return { ok: true, local: true, ...localChar(inp) };
+  const r = await Kit.ai.ask({ system: CHAR_SYSTEM, prompt: charPrompt(inp), json: true, maxTokens: 900 });
+  return { ok: true, ...normalizeChar(r.json, inp) };
+}
+function startGen(i){
+  S.chars[i] = { ok: false, pending: true };
+  drawGen();
+  const p = genChar(i).then(c => { S.chars[i] = c; }).catch(e => {
+    console.warn(e);
+    S.chars[i] = { ok: false, error: (e && e.message) || 'キャラを作れませんでした' };
+  }).finally(() => { delete pending[i]; drawGen(); checkAllReady(); });
+  pending[i] = p;
+  return p;
+}
+
+/* ---------- バトル実況 ---------- */
+const BATTLE_SYSTEM = 'あなたは対戦ゲームの名実況アナウンサーです。架空のキャラクター同士のバトルを、コミカルで迫力のある実況で描きます。流血・残酷・差別的な表現は使いません。指定のJSONだけを出力し、前置きや説明、コードブロックは書きません。';
+function battlePrompt(){
+  const L = LEN[S.length];
+  const roster = S.chars.map((c, i) => `[${i}] ${c.name}（${c.title}）
+  見た目:${c.look} / 性格:${c.personality} / 武器:${c.weapon} / 能力:${c.ability}
+  必殺技:${c.special.name}（${c.special.desc}） / HP${c.stats.hp} 攻${c.stats.atk} 防${c.stats.def} 速${c.stats.spd}`).join('\n');
+  return `次のキャラクター${S.chars.length}体が、最後の1体になるまで戦うバトルの実況を作ってください。
+
+${roster}
+
+ルール:
+- events は ${L.events[0]}〜${L.events[1]} 個。1つの text は60文字以内。
+- speaker は "実況" か "解説"。実況が中心で、解説はときどき（全体の2〜3割）。
+- 各キャラの見た目・性格・武器・能力・必殺技を活かした展開にする。ステータスも参考にするが、意外な逆転があってもよい。
+- 攻撃でHPが減ったイベントには hp を入れる。hp は { "キャラ番号": 残りHP } の形で、そのイベントで変わったキャラだけ。HPは0未満にしない。
+- 倒れたキャラはHPを0にし、その後は攻撃しない。最後に生き残るのは1体だけ（winner）。winner の最終HPは1以上。
+- 最後のイベントは決着の瞬間（勝者の決めゼリフを入れてもよい）。
+- finish は決まり手（15文字以内）。
+
+出力形式（このJSONのみ）:
+{"events":[{"speaker":"実況","text":"","hp":{"0":90}}],"winner":0,"finish":""}`;
+}
+function normalizeBattle(j){
+  const n = S.chars.length;
+  const max = S.chars.map(c => c.stats.hp);
+  const hp = max.slice();
+  const events = [];
+  (Array.isArray(j && j.events) ? j.events : []).forEach(e => {
+    if(!e || !e.text) return;
+    const ev = { speaker: e.speaker === '解説' ? '解説' : '実況', text: cut(e.text, 90), hp: {} };
+    if(e.hp && typeof e.hp === 'object') Object.entries(e.hp).forEach(([k, v]) => {
+      const i = +k; if(Number.isInteger(i) && i >= 0 && i < n){ hp[i] = clampN(v, 0, max[i], hp[i]); ev.hp[i] = hp[i]; }
+    });
+    events.push(ev);
+  });
+  if(events.length < 3) throw new Kit.ai.Error('実況がうまく作れませんでした。もう一度試してください', 'events too few');
+  let winner = clampN(j.winner, 0, n - 1, -1);
+  const alive = hp.map((h, i) => h > 0 ? i : -1).filter(i => i >= 0);
+  if(winner < 0 || hp[winner] <= 0) winner = alive.length ? alive.reduce((a, b) => hp[a] >= hp[b] ? a : b) : 0;
+  // 決着の整合：勝者以外は最後にHP0、勝者は1以上
+  const last = events[events.length - 1];
+  hp.forEach((h, i) => {
+    if(i !== winner && h > 0){ hp[i] = 0; last.hp[i] = 0; }
+  });
+  if(hp[winner] <= 0){ hp[winner] = 1; last.hp[winner] = 1; }
+  return { events, winner, finish: cut(j.finish, 18) || '' , finalHp: hp };
+}
+// AIなしの簡易バトル
+function localBattle(){
+  const n = S.chars.length, L = LEN[S.length];
+  const target = L.events[0] + Math.floor(Math.random() * (L.events[1] - L.events[0] + 1));
+  const C = S.chars, hp = C.map(c => c.stats.hp), events = [];
+  const say = (text, upd, sp='実況') => { const ev = { speaker: sp, text, hp: {} }; (upd || []).forEach(i => ev.hp[i] = hp[i]); events.push(ev); };
+  say(`さあ始まりました！${C.map(c => c.name).join('、')}、${n === 2 ? '一騎打ち' : 'バトルロイヤル'}です！`);
+  // 想定行数で全員を削り切れるようにダメージ倍率を決める
+  const rounds = Math.max(2, target - 3);
+  const total = hp.reduce((a, b) => a + b, 0) - Math.max(...hp) * 0.4;
+  const scale = total / rounds / 6;
+  const alive = () => hp.map((h, i) => h > 0 ? i : -1).filter(i => i >= 0);
+  let guard = 0;
+  while(alive().length > 1 && guard++ < 60){
+    const as = alive();
+    const a = as.reduce((p, q) => (C[q].stats.spd + Math.random() * 6) > (C[p].stats.spd + Math.random() * 6) ? q : p, as[0]);
+    const foes = as.filter(i => i !== a), d = pick(foes);
+    const special = Math.random() < 0.22;
+    let dmg = Math.round(scale * (C[a].stats.atk * (special ? 2.2 : 1.2) - C[d].stats.def * 0.5 + 4 + Math.random() * 4));
+    dmg = Math.max(6, dmg);
+    hp[d] = Math.max(0, hp[d] - dmg);
+    const A = C[a], D = C[d];
+    const line = special
+      ? `${A.name}、必殺「${A.special.name}」！${D.name}に大ダメージ！`
+      : pick([`${A.name}の${A.weapon}が${D.name}をとらえた！`, `${A.name}、${A.input.ability}で一気に間合いを詰める！`, `${D.name}の守りを${A.name}が崩しにかかる！`, `${A.name}の${A.input.personality}な一撃が炸裂！`]);
+    say(line, [d]);
+    if(hp[d] === 0) say(`${D.name}、ダウン！ここで脱落だ！`, [d]);
+    else if(Math.random() < 0.3) say(pick([`${A.name}は速さが持ち味ですからね。`, `${D.name}、まだ目は死んでいません。`, `いまのは${A.input.weapon}の使い方が上手かった。`, `${A.name}、性格がよく出た攻めです。`]), [], '解説');
+  }
+  const w = alive()[0] ?? 0;
+  say(`決着！最後まで立っていたのは${C[w].name}！${C[w].quote ? `「${C[w].quote}」` : ''}`);
+  return normalizeBattle({ events, winner: w, finish: '判定なしのKO' });
+}
+async function genBattle(){
+  if(S.local || !aiOn()) return localBattle();
+  const r = await Kit.ai.ask({ system: BATTLE_SYSTEM, prompt: battlePrompt(), json: true, maxTokens: S.length === 'long' ? 3500 : 2200 });
+  return normalizeBattle(r.json);
+}
+
+/* =========================================================
+   開始画面
+   ========================================================= */
+function drawSetup(){
+  S.players = partyNames();
+  const raw = clampN(Kit.settings.get().partySize, 1, 99, 1);
+  $('members').innerHTML = S.players.map((p, i) => `<span class="k-chip fc${i}" style="border-color:var(--k-ink);box-shadow:inset 0 -4px 0 var(--fc)">${esc(p)}</span>`).join('')
+    + `<span class="k-chip k-chip--teal">${S.players.length}人</span>`;
+  $('memberNote').textContent = (raw > 4 ? `このゲームは1〜4人です。${S.players.length}人で遊びます。` : '')
+    + (S.players.length === 1 ? '1人のときは、用意された敵キャラと戦います。' : '') + '人数と名前はタイトルの「みんなで遊ぶ」で変えられます。';
+  $('lenSeg').querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.v === S.length)));
+  $('lenHint').textContent = LEN[S.length].hint;
+  const c = Kit.ai.current();
+  $('aiLine').textContent = c.ready ? `${c.label}（${c.model}）でキャラと実況を作ります` : `${c.label}のAPIキーが未設定です`;
+  $('aiLine').classList.toggle('warn', !c.ready);
+  $('aiHint').textContent = c.ready ? '使うAIはタイトルの「設定変更」で切り替えられます。' : 'このままでも「AIなしの簡易モード」で遊べます。タイトルの「設定変更」でキーを入れると、AIがキャラと実況を作ります。';
+}
+$('lenSeg').addEventListener('click', e => {
+  const b = e.target.closest('button'); if(!b) return;
+  S.length = b.dataset.v; Kit.store.set(ID + '.len', S.length); drawSetup();
+});
+$('btnStart').addEventListener('click', () => {
+  const keepLen = S.length;
+  S = fresh(); S.length = keepLen;
+  S.local = !aiOn();
+  S.phase = 'entry'; S.cur = 0;
+  drawEntry(); Kit.screen('sEntry');
+});
+
+/* =========================================================
+   入力（生成中に次の人が入力）
+   ========================================================= */
+function drawEntry(){
+  const i = S.cur;
+  $('entryPanel').className = `k-panel fc${i}`;
+  $('entryWho').textContent = `${S.players[i]} のキャラ`;
+  $('entryStep').textContent = S.players.length > 1 ? `${i + 1} / ${S.players.length}人目　ほかの人は見ないでね` : '各6文字まで';
+  const v = S.inputs[i] || {};
+  $('entryForm').innerHTML = FIELDS.map(f => `<div class="fld">
+      <label for="f_${f.k}">${f.label}</label>
+      <input class="k-input" id="f_${f.k}" name="${f.k}" maxlength="12" placeholder="${esc(f.ph)}" value="${esc(v[f.k] || '')}" enterkeyhint="next">
+      <span class="cnt" id="c_${f.k}"></span></div>`).join('');
+  FIELDS.forEach(f => drawCount(f.k));
+  drawGen();
+  setTimeout(() => { const el = $('f_name'); if(el && !el.value) el.focus(); }, 50);
+}
+function drawCount(k){
+  const el = $('f_' + k), c = $('c_' + k); if(!el || !c) return;
+  const n = len(el.value); c.textContent = `${n}/${MAXLEN}`; c.classList.toggle('over', n > MAXLEN);
+}
+$('entryForm').addEventListener('input', e => { if(e.target.name) drawCount(e.target.name); });
+$('entryForm').addEventListener('keydown', e => {
+  if(e.key !== 'Enter' || e.isComposing) return;
+  const idx = FIELDS.findIndex(f => f.k === e.target.name);
+  if(idx >= 0 && idx < FIELDS.length - 1){ e.preventDefault(); $('f_' + FIELDS[idx + 1].k).focus(); }
+});
+$('btnRandom').addEventListener('click', () => {
+  const used = new Set(S.inputs.filter((x, i) => x && i !== S.cur).map(x => x.name));
+  FIELDS.forEach(f => {
+    const el = $('f_' + f.k); if(el.value.trim()) return;
+    const opts = f.k === 'name' ? RANDOM_WORDS.name.filter(w => !used.has(w)) : RANDOM_WORDS[f.k];
+    el.value = pick(opts.length ? opts : RANDOM_WORDS[f.k]); drawCount(f.k);
+  });
+});
+$('entryForm').addEventListener('submit', e => {
+  e.preventDefault();
+  const inp = {};
+  for(const f of FIELDS){
+    const el = $('f_' + f.k), v = el.value.replace(/\s+/g, ' ').trim();
+    if(!v){ Kit.toast(`${f.label}を入れてください`); Kit.shake(el); Kit.SE.play('ng'); el.focus(); return; }
+    if(len(v) > MAXLEN){ Kit.toast(`${f.label}は${MAXLEN}文字までです`); Kit.shake(el); Kit.SE.play('ng'); el.focus(); return; }
+    inp[f.k] = v;
+  }
+  const i = S.cur;
+  if(S.inputs.some((x, j) => x && j !== i && x.name === inp.name)){
+    Kit.toast('同じキャラ名がすでにいます。別の名前にしてください'); Kit.shake($('f_name')); Kit.SE.play('ng'); $('f_name').focus(); return;
+  }
+  S.inputs[i] = inp;
+  startGen(i); // ここで生成開始。待たずに次の人へ
+  Kit.SE.play('whoosh');
+  if(i + 1 < S.players.length){
+    S.cur = i + 1; drawEntry(); window.scrollTo(0, 0);
+    Kit.toast(`次は ${S.players[S.cur]} さんの番`, 1400);
+  } else {
+    if(S.players.length === 1) addEnemy();
+    S.phase = 'wait'; drawWait(); Kit.screen('sWait'); checkAllReady();
+  }
+});
+function addEnemy(){
+  const e = pick(window.MOJI_ENEMIES || []);
+  S.enemy = true;
+  S.inputs[1] = { name: e.name, ...e.input };
+  S.chars[1] = { ok: true, enemy: true, ...JSON.parse(JSON.stringify(e)) };
+}
+function genRows(){
+  return S.inputs.map((inp, i) => {
+    const c = S.chars[i] || {};
+    const who = S.enemy && i === 1 ? '敵キャラ' : S.players[i];
+    const st = c.ok ? '<span class="st ok">完成</span>' : c.error ? '<span class="st ng">失敗</span>' : '<span class="spin" aria-hidden="true"></span><span class="st">生成中</span>';
+    return `<li class="fc${i}"><span class="dot"></span>${esc(who)}：${esc(c.ok ? c.name : inp.name)}${st}</li>`;
+  }).join('');
+}
+function drawGen(){
+  const any = S.inputs.length > 0 && S.phase === 'entry';
+  $('genPanel').hidden = !any;
+  if(any) $('genList').innerHTML = genRows();
+  if(S.phase === 'wait') drawWait();
+}
+function drawWait(){
+  $('waitList').innerHTML = genRows();
+  const errs = S.chars.filter(c => c && c.error);
+  $('waitErr').hidden = !errs.length || Object.keys(pending).length > 0;
+  if(errs.length) $('waitErrMsg').textContent = errs[0].error;
+}
+function checkAllReady(){
+  if(S.phase !== 'wait') return;
+  const n = S.inputs.length;
+  if(S.chars.length >= n && S.chars.slice(0, n).every(c => c && c.ok)){ startIntro(); }
+  else drawWait();
+}
+$('btnRetryGen').addEventListener('click', () => {
+  S.chars.forEach((c, i) => { if(c && c.error) startGen(i); }); drawWait();
+});
+$('btnLocalGen').addEventListener('click', () => {
+  S.local = true;
+  S.chars.forEach((c, i) => { if(c && c.error) startGen(i); }); drawWait();
+});
+
+/* =========================================================
+   入場 → 対峙
+   ========================================================= */
+function ownerOf(i){ return S.enemy && i === 1 ? '敵キャラ' : `${S.players[i]} のキャラ`; }
+function cardHtml(c, i, stamp){
+  return `<article class="cc fc${i}">
+    ${stamp ? '<span class="entered">入場!</span>' : ''}
+    <div class="owner">${esc(ownerOf(i))}${c.local ? '（簡易モード）' : ''}</div>
+    <h2 class="nm">${esc(c.name)}</h2>
+    <span class="ttl">${esc(c.title)}</span>
+    <dl><dt>見た目</dt><dd>${esc(c.look)}</dd><dt>性格</dt><dd>${esc(c.personality)}</dd>
+      <dt>武器</dt><dd>${esc(c.weapon)}</dd><dt>能力</dt><dd>${esc(c.ability)}</dd></dl>
+    <div class="stats"><div><b>${c.stats.hp}</b><span>HP</span></div><div><b>${c.stats.atk}</b><span>攻撃</span></div><div><b>${c.stats.def}</b><span>防御</span></div><div><b>${c.stats.spd}</b><span>速さ</span></div></div>
+    <div class="sp"><b>必殺：${esc(c.special.name)}</b>${c.special.desc ? `<br>${esc(c.special.desc)}` : ''}</div>
+    ${c.quote ? `<p class="quote">「${esc(c.quote)}」</p>` : ''}
+  </article>`;
+}
+let introIdx = 0, battlePromise = null;
+function startIntro(){
+  S.phase = 'intro'; introIdx = 0;
+  prefetchBattle(); // 入場演出のあいだに実況を作り始める
+  Kit.screen('sIntro'); showIntro();
+}
+function showIntro(){
+  const c = S.chars[introIdx];
+  $('introCall').textContent = c.intro;
+  $('introCard').innerHTML = cardHtml(c, introIdx, true);
+  $('introCard').firstElementChild.classList.add(introIdx % 2 ? 'enter-r' : 'enter-l');
+  Kit.SE.play('whoosh'); setTimeout(() => Kit.SE.play('stamp'), 550);
+  $('btnIntroNext').textContent = introIdx + 1 < S.chars.length ? '次の入場' : '対峙へ';
+}
+$('btnIntroNext').addEventListener('click', () => {
+  introIdx++;
+  if(introIdx < S.chars.length){ showIntro(); window.scrollTo(0, 0); }
+  else toVersus();
+});
+function prefetchBattle(){
+  if(battlePromise || S.battle) return;
+  $('vsErr').hidden = true;
+  battlePromise = genBattle().then(b => { S.battle = b; }).catch(e => { S.battleError = (e && e.message) || '実況を作れませんでした'; })
+    .finally(() => { battlePromise = null; if(S.phase === 'versus') drawVersusState(); });
+}
+function toVersus(){
+  S.phase = 'versus';
+  const n = S.chars.length;
+  const fs = name => { const l = len(name); return l <= 3 ? 26 : l <= 4 ? 22 : l <= 5 ? 19 : 16; };
+  const cards = S.chars.map((c, i) => `<div class="vs-card fc${i} ${i % 2 ? 'vs-r' : 'vs-l'}"><div class="nm" style="font-size:${n === 2 ? fs(c.name) : fs(c.name) + 2}px">${esc(c.name)}</div><div class="ttl">${esc(c.title)}</div><div class="own">${esc(S.enemy && i === 1 ? '敵キャラ' : S.players[i])}</div></div>`);
+  $('vsWrap').className = `vs-wrap n${n}`;
+  $('vsWrap').innerHTML = n === 2 ? `${cards[0]}<div class="vs">VS</div>${cards[1]}` : `${cards.join('')}<div class="vs vs-mid">VS</div>`;
+  Kit.screen('sVersus'); Kit.SE.play('whoosh'); setTimeout(() => Kit.SE.play('stamp'), 700);
+  drawVersusState();
+}
+function drawVersusState(){
+  const ready = !!S.battle;
+  $('btnFight').disabled = !ready;
+  $('vsWait').textContent = ready ? '' : battlePromise ? '実況の準備中…（少しかかります）' : '';
+  $('vsErr').hidden = !(S.battleError && !battlePromise && !ready);
+  if(S.battleError) $('vsErrMsg').textContent = S.battleError;
+}
+$('btnRetryBattle').addEventListener('click', () => { S.battleError = ''; prefetchBattle(); drawVersusState(); });
+$('btnLocalBattle').addEventListener('click', () => { S.battleError = ''; S.local = true; prefetchBattle(); drawVersusState(); });
+$('btnFight').addEventListener('click', () => {
+  if(!S.battle) return;
+  Kit.SE.play('go');
+  S.phase = 'battle'; S.shown = 0; S.hp = S.chars.map(c => c.stats.hp);
+  drawHud(); $('feed').innerHTML = ''; Kit.screen('sBattle');
+  setTimeout(nextLine, 500);
+});
+
+/* =========================================================
+   バトル（実況を1行ずつ）
+   ========================================================= */
+function drawHud(hitSet){
+  $('hud').innerHTML = S.chars.map((c, i) => {
+    const max = c.stats.hp, h = S.hp[i];
+    return `<div class="hp fc${i}${h <= 0 ? ' down' : ''}${hitSet && hitSet.has(i) ? ' hit' : ''}"><span class="nm">${esc(c.name)}</span><span class="num">${h}/${max}</span>
+      <span class="bar"><i style="transform:scaleX(${Math.max(0, h / max)})"></i></span></div>`;
+  }).join('');
+}
+function addLine(ev, big){
+  const feed = $('feed');
+  feed.querySelectorAll('.line').forEach(l => l.classList.add('old'));
+  const el = document.createElement('div');
+  el.className = `line${ev.speaker === '解説' ? ' kaisetsu' : ''}${big ? ' big' : ''}`;
+  el.innerHTML = `<span class="who">${esc(ev.speaker)}</span><p>${esc(ev.text)}</p>`;
+  feed.appendChild(el);
+  // 古い行は5行まで残す
+  while(feed.children.length > 6) feed.firstElementChild.remove();
+}
+let autoT = 0;
+function nextLine(){
+  clearTimeout(autoT);
+  if(S.phase !== 'battle') return;
+  const evs = S.battle.events;
+  if(S.shown >= evs.length){ finish(); return; }
+  const ev = evs[S.shown++];
+  const hits = new Set();
+  Object.entries(ev.hp || {}).forEach(([k, v]) => { const i = +k; if(v < S.hp[i]) hits.add(i); S.hp[i] = v; });
+  const last = S.shown >= evs.length;
+  addLine(ev, last);
+  drawHud(hits);
+  if(hits.size){ Kit.SE.play(Object.values(ev.hp).some(v => v === 0) ? 'stamp' : 'ng'); if(navigator.vibrate) navigator.vibrate(30); }
+  else Kit.SE.play(ev.speaker === '解説' ? 'tick' : 'pop');
+  $('btnNext').textContent = last ? '結果へ' : '次へ';
+  if(auto) autoT = setTimeout(nextLine, last ? 2200 : 1200 + len(ev.text) * 55);
+}
+let auto = !!Kit.store.get(ID + '.auto', false);
+const drawAuto = () => $('btnAuto').setAttribute('aria-pressed', String(auto));
+drawAuto();
+$('btnAuto').addEventListener('click', () => {
+  auto = !auto; Kit.store.set(ID + '.auto', auto); drawAuto(); Kit.SE.play('select');
+  if(auto && S.phase === 'battle') autoT = setTimeout(nextLine, 600); else clearTimeout(autoT);
+});
+$('btnNext').addEventListener('click', nextLine);
+
+/* =========================================================
+   結果
+   ========================================================= */
+async function finish(){
+  clearTimeout(autoT);
+  S.phase = 'result';
+  const w = S.battle.winner, c = S.chars[w];
+  $('resPanel').className = `k-panel k-panel--tape k-center fc${w}`;
+  $('resName').textContent = c.name;
+  $('resOwner').textContent = ownerOf(w);
+  $('resFinish').textContent = S.battle.finish ? `決まり手：${S.battle.finish}` : '';
+  $('resCards').innerHTML = S.chars.map((x, i) => cardHtml(x, i, false)).join('');
+  Kit.screen('sResult');
+  Kit.clearSave(ID);
+  if(!S.recorded){
+    S.recorded = true;
+    const g = Kit.newGroup();
+    const hpLeft = S.battle.finalHp[w];
+    if(S.enemy){
+      Kit.record({ game: ID, player: S.players[0], result: w === 0 ? 'clear' : 'fail', score: w === 0 ? hpLeft : 0, detail: `${S.chars[0].name} vs ${S.chars[1].name}`, group: g });
+    }else{
+      S.players.forEach((p, i) => Kit.record({ game: ID, player: p, result: i === w ? 'win' : 'lose', score: i === w ? hpLeft : 0, detail: `${S.chars[i].name}で${S.chars.length}人対戦`, group: g }));
+    }
+  }
+  const youLost = S.enemy && w !== 0;
+  if(youLost) await Kit.fail({ title: 'まけ…', sub: `${c.name} の勝ち` });
+  else await Kit.celebrate({ title: '勝者!', sub: `${c.name}（${S.enemy ? S.players[0] : S.players[w]}）` });
+}
+$('btnRematch').addEventListener('click', () => {
+  // 同じキャラで、実況だけ作り直す
+  S.battle = null; S.battleError = ''; S.recorded = false; S.phase = 'versus';
+  prefetchBattle(); toVersus();
+});
+$('btnNew').addEventListener('click', () => { S = Object.assign(fresh(), { length: S.length }); drawSetup(); Kit.screen('sSetup'); });
+
+/* =========================================================
+   起動・再開
+   ========================================================= */
+drawSetup();
+const saved = Kit.load(ID);
+if(saved && saved.phase && saved.phase !== 'setup'){
+  S = Object.assign(fresh(), saved);
+  if(S.phase === 'entry'){
+    // 入力済みでキャラが未完成の人は作り直す
+    S.inputs.forEach((inp, i) => { if(i < S.cur && !(S.chars[i] && S.chars[i].ok)) startGen(i); });
+    drawEntry(); Kit.screen('sEntry');
+  } else if(S.phase === 'wait' || S.phase === 'intro'){
+    S.phase = 'wait';
+    S.inputs.forEach((inp, i) => { if(!(S.chars[i] && S.chars[i].ok)) startGen(i); });
+    Kit.screen('sWait'); checkAllReady();
+  } else if(S.phase === 'versus'){
+    if(!S.battle) prefetchBattle();
+    toVersus();
+  } else if(S.phase === 'battle' && S.battle){
+    // 実況は最初から
+    S.shown = 0; S.hp = S.chars.map(c => c.stats.hp);
+    drawHud(); $('feed').innerHTML = ''; Kit.screen('sBattle'); setTimeout(nextLine, 400);
+  } else { S = fresh(); drawSetup(); }
+  Kit.toast('つづきから再開します');
+}
+window.addEventListener('pageshow', e => { if(e.persisted && S.phase === 'setup') drawSetup(); });
+})();
+</script>
+</body>
+</html>

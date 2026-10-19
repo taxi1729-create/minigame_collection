@@ -122,33 +122,21 @@ function vibrate(pattern = [50]) {
   if ('vibrate' in navigator) navigator.vibrate(pattern);
 }
 
-// ===== Claude API =====
-async function callClaude(prompt) {
-  const key = GameState.claudeApiKey || CONFIG.CLAUDE_API_KEY;
-  if (!key) return null;
+// ===== AI（タイトルの「設定変更」で選んだ Claude / Gemini を使う）=====
+function aiReady() { return !!(window.Kit && Kit.ai.current().ready); }
+async function callAI(prompt) {
+  if (!aiReady()) return null;
   try {
-    const res = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'content-type': 'application/json',
-        'x-api-key': key,
-        'anthropic-version': '2023-06-01',
-        'anthropic-dangerous-direct-browser-access': 'true'
-      },
-      body: JSON.stringify({
-        model: CONFIG.CLAUDE_MODEL,
-        max_tokens: 300,
-        messages: [{ role: 'user', content: prompt }]
-      })
-    });
-    if (!res.ok) { const e = await res.json(); throw new Error(e.error?.message); }
-    const data = await res.json();
-    return data.content?.[0]?.text || null;
-  } catch(e) {
-    console.error('Claude API error:', e);
+    const r = await Kit.ai.ask({ prompt, maxTokens: 400 });
+    return (r.text || '').trim() || null;
+  } catch (e) {
+    console.error('AI error:', e);
+    if (window.Kit && e && e.message) Kit.toast(e.message, 2600);
     return null;
   }
 }
+// 旧名の呼び出しにも対応
+const callClaude = callAI, callGemini = callAI;
 
 // ===== ローカル答え判定（類義語・順序不問） =====
 function judgeAnswerLocally(answer, modifiers, baseTopic) {

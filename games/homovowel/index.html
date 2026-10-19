@@ -156,70 +156,21 @@ function countKana(r){
 function generateId(){return "w"+Date.now().toString(36)+Math.random().toString(36).slice(2,6);}
 
 // ═══════════════════════════════════════════════════════════════
-// GitHub API — 設定はlocalStorageから動的取得
+// 単語DB — 端末に保存（AIで増やした言葉もここに貯まる）
 // ═══════════════════════════════════════════════════════════════
-function ghConfig(){
-  return {
-    owner: lsGet(LS.GH_OWNER),
-    repo:  lsGet(LS.GH_REPO),
-    token: lsGet(LS.GH_TOKEN),
-  };
-}
-function ghReady(cfg){ return !!(cfg.owner && cfg.repo); }
-
-async function fetchDB(){
-  const cfg=ghConfig();
-  if(!ghReady(cfg)) return {db:null,sha:null};
-  try{
-    const headers={"Accept":"application/vnd.github+json"};
-    // トークンがあれば付与（プライベートリポジトリ対応）
-    if(cfg.token) headers["Authorization"]=`Bearer ${cfg.token}`;
-    const res=await fetch(
-      `https://api.github.com/repos/${cfg.owner}/${cfg.repo}/contents/${DB_PATH}?ref=${GH_BRANCH}`,
-      {headers}
-    );
-    if(!res.ok) return {db:null,sha:null};
-    const json=await res.json();
-    return {db:JSON.parse(atob(json.content.replace(/\n/g,""))),sha:json.sha};
-  }catch{return {db:null,sha:null};}
-}
-
-async function saveDB(db,sha){
-  const cfg=ghConfig();
-  if(!cfg.token||!ghReady(cfg)) return {newSha:null,error:"GitHub PAT またはリポジトリ情報が未設定です"};
-  try{
-    const content=btoa(unescape(encodeURIComponent(JSON.stringify(db,null,2))));
-    const body={message:`chore: update database [${new Date().toISOString()}]`,content,branch:GH_BRANCH};
-    if(sha) body.sha=sha;
-    const res=await fetch(
-      `https://api.github.com/repos/${cfg.owner}/${cfg.repo}/contents/${DB_PATH}`,
-      {method:"PUT",
-       headers:{"Authorization":`Bearer ${cfg.token}`,"Content-Type":"application/json","Accept":"application/vnd.github+json"},
-       body:JSON.stringify(body)}
-    );
-    if(!res.ok){
-      const e=await res.json().catch(()=>({}));
-      return {newSha:null,error:e.message||`HTTP ${res.status}`};
-    }
-    const json=await res.json();
-    return {newSha:json.content?.sha||sha, error:null};
-  }catch(e){return {newSha:null,error:e.message};}
-}
+const DB_KEY="homovowel.db";
+async function fetchDB(){ const d=Kit.store.get(DB_KEY,null); return {db:(d&&Array.isArray(d.words))?d:null,sha:null}; }
+async function saveDB(db){ return Kit.store.set(DB_KEY,db)?{newSha:null,error:null}:{newSha:null,error:"端末の保存容量がいっぱいです"}; }
 
 // ═══════════════════════════════════════════════════════════════
-// Gemini API — キーはlocalStorageから動的取得
+// AI — タイトルの「設定変更」で選んだ Claude / Gemini を使う
 // ═══════════════════════════════════════════════════════════════
-async function callGemini(prompt,maxTokens=2000){
-  const key=lsGet(LS.GEMINI_KEY);
-  if(!key) throw new Error("Gemini APIキーが未設定です");
-  const url=`https://generativelanguage.googleapis.com/v1/models/${GEMINI_MODEL}:generateContent?key=${key}`;
-  
-  const res=await fetch(url,{method:"POST",headers:{"Content-Type":"application/json"},
-    body:JSON.stringify({contents:[{parts:[{text:prompt}]}],generationConfig:{maxOutputTokens:maxTokens,temperature:0.7}})});
-  if(!res.ok){const e=await res.json().catch(()=>({}));throw new Error(e?.error?.message||`HTTP ${res.status}`);}
-  const data=await res.json();
-  return data.candidates?.[0]?.content?.parts?.[0]?.text||"";
+const aiReady=()=>Kit.ai.current().ready;
+async function callAI(prompt,maxTokens=2000){
+  const r=await Kit.ai.ask({prompt,maxTokens});
+  return r.text||"";
 }
+const parseAI=text=>Kit.ai.parseJson(text);
 
 // 読み仮名だけから「代表的な単語と意味」をAIで取得
 async function aiResolveReading(reading){
@@ -227,8 +178,8 @@ async function aiResolveReading(reading){
 出力形式（JSONのみ・余計な文章不要）:
 {"word":"漢字表記","meaning":"30文字以内の意味説明"}`;
   try{
-    const text=await callGemini(prompt,200);
-    const parsed=JSON.parse(text.replace(/```json|```/g,"").trim());
+    const text=await callAI(prompt,200);
+    const parsed=parseAI(text);
     return {word:parsed.word||reading, meaning:parsed.meaning||reading+"に関するもの"};
   }catch{
     return {word:reading, meaning:reading+"に関するもの"};
@@ -248,14 +199,14 @@ async function aiGenerateHomovowels(targetReading,targetWord,existing,needed){
 {"words":[{"word":"表記","reading":"よみがな","meaning":"説明"}],"exhausted":false}
 これ以上存在しない場合:{"words":[],"exhausted":true}`;
   try{
-    const text=await callGemini(prompt,2000);
-    return JSON.parse(text.replace(/```json|```/g,"").trim());
+    const text=await callAI(prompt,2000);
+    return parseAI(text);
   }catch{return {words:[],exhausted:false};}
 }
 
 async function aiGenerateHint(answerWord,answerReading){
   const prompt=`単語「${answerWord}」（${answerReading}）の意味を、その単語自体や読み方を一切使わずに30文字以内で説明してください。意味の説明文のみ回答。`;
-  try{const text=await callGemini(prompt,200);return text.trim()||`${answerWord}に関するもの`;}
+  try{const text=await callAI(prompt,200);return text.trim()||`${answerWord}に関するもの`;}
   catch{return `${answerWord}に関するもの`;}
 }
 
@@ -301,126 +252,6 @@ const inp=(err=false)=>({background:C.white,color:C.black,
   padding:"10px 14px",fontSize:"1rem",fontFamily:FM,fontWeight:"700",borderRadius:"10px",outline:"none",width:"100%"});
 
 // ═══════════════════════════════════════════════════════════════
-// SettingsScreen — APIキー・GitHub設定
-// ═══════════════════════════════════════════════════════════════
-function SettingsScreen({onBack}){
-  const [geminiKey,setGeminiKey]=useState(lsGet(LS.GEMINI_KEY));
-  const [ghToken,setGhToken]=useState(lsGet(LS.GH_TOKEN));
-  const [ghOwner,setGhOwner]=useState(lsGet(LS.GH_OWNER));
-  const [ghRepo,setGhRepo]=useState(lsGet(LS.GH_REPO));
-  const [saved,setSaved]=useState(false);
-  const [showGemini,setShowGemini]=useState(false);
-  const [showToken,setShowToken]=useState(false);
-  const [testMsg,setTestMsg]=useState("");
-  const [testing,setTesting]=useState(false);
-
-  const handleSave=()=>{
-    lsSet(LS.GEMINI_KEY,geminiKey.trim());
-    lsSet(LS.GH_TOKEN,ghToken.trim());
-    lsSet(LS.GH_OWNER,ghOwner.trim());
-    lsSet(LS.GH_REPO,ghRepo.trim());
-    setSaved(true);
-    setTimeout(()=>setSaved(false),2000);
-  };
-
-  const testGemini=async()=>{
-    setTesting(true);setTestMsg("");
-    lsSet(LS.GEMINI_KEY,geminiKey.trim());
-    try{
-      const text=await callGemini("「テスト」という単語の意味を10文字以内で答えてください。",100);
-      setTestMsg("✓ Gemini 接続成功: "+text.trim().slice(0,40));
-    }catch(e){setTestMsg("✗ エラー: "+e.message);}
-    setTesting(false);
-  };
-
-  const testGitHub=async()=>{
-    setTesting(true);setTestMsg("");
-    lsSet(LS.GH_TOKEN,ghToken.trim());
-    lsSet(LS.GH_OWNER,ghOwner.trim());
-    lsSet(LS.GH_REPO,ghRepo.trim());
-    const {db,sha}=await fetchDB();
-    if(db) setTestMsg(`✓ GitHub 接続成功 — database.json 読み込み完了 (${db.words?.length||0}語)`);
-    else    setTestMsg("✗ GitHub 接続失敗 — owner/repo/token を確認してください");
-    setTesting(false);
-  };
-
-  return <div style={{minHeight:"100vh",background:"transparent",padding:"24px 16px"}}>
-    <div style={{maxWidth:"600px",margin:"0 auto"}}>
-      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"24px",borderBottom:`3px solid ${C.black}`,paddingBottom:"16px"}}>
-        <div style={{fontFamily:FD,fontSize:"2.5rem",color:C.black}}>設定</div>
-        <Btn bg={C.gray} fg={C.black} onClick={onBack}>← 戻る</Btn>
-      </div>
-
-      {saved&&<div style={{background:C.green,color:C.black,border:`3px solid ${C.black}`,padding:"10px 16px",marginBottom:"14px",fontWeight:"700"}}>✓ 設定を保存しました（ブラウザに記憶）</div>}
-      {testMsg&&<div style={{background:testMsg.startsWith("✓")?C.green:C.red,color:testMsg.startsWith("✓")?C.black:C.white,border:`3px solid ${C.black}`,padding:"10px 16px",marginBottom:"14px",fontWeight:"700",fontSize:"0.82rem"}}>{testMsg}</div>}
-
-      {/* Gemini API */}
-      <Card bg={C.white} sh={C.yellow}>
-        <Lbl>◆ Gemini API キー（Google AI Studio）</Lbl>
-        <p style={{fontSize:"0.82rem",marginBottom:"12px",lineHeight:1.7,color:C.darkGray}}>
-          取得先: <a href="https://aistudio.google.com/" target="_blank" style={{color:C.blue}}>https://aistudio.google.com/</a><br/>
-          「Get API key」→「Create API key」でコピーして貼り付けてください。
-        </p>
-        <div style={{position:"relative",marginBottom:"10px"}}>
-          <input
-            type={showGemini?"text":"password"}
-            style={{...inp(),paddingRight:"48px"}}
-            placeholder="AIzaSy..."
-            value={geminiKey}
-            onChange={e=>setGeminiKey(e.target.value)}
-            autoComplete="off"
-          />
-          <button style={{position:"absolute",right:"10px",top:"50%",transform:"translateY(-50%)",background:"none",border:"none",cursor:"pointer",fontSize:"1.1rem",color:C.darkGray}}
-            onClick={()=>setShowGemini(v=>!v)} tabIndex={-1}>{showGemini?"🙈":"👁"}</button>
-        </div>
-        <Btn bg={C.yellow} fg={C.black} size="sm" onClick={testGemini} disabled={testing||!geminiKey.trim()}>
-          {testing?"テスト中...":"接続テスト"}
-        </Btn>
-      </Card>
-
-      {/* GitHub設定 */}
-      <Card bg={C.white} sh={C.blue}>
-        <Lbl>◆ GitHub 設定（単語DBの保存・読み込み）</Lbl>
-        <p style={{fontSize:"0.82rem",marginBottom:"12px",lineHeight:1.7,color:C.darkGray}}>
-          単語DBをGitHubリポジトリの <code>database.json</code> で管理します。<br/>
-          PATの取得: GitHub → Settings → Developer settings → Personal access tokens → <strong>repo</strong> スコープにチェック
-        </p>
-        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"10px",marginBottom:"10px"}}>
-          <div><Lbl>GitHubユーザー名</Lbl><input style={inp()} placeholder="例: yamada-taro" value={ghOwner} onChange={e=>setGhOwner(e.target.value)}/></div>
-          <div><Lbl>リポジトリ名</Lbl><input style={inp()} placeholder="例: homovowel-db" value={ghRepo} onChange={e=>setGhRepo(e.target.value)}/></div>
-        </div>
-        <Lbl>Personal Access Token（repo スコープ）</Lbl>
-        <div style={{position:"relative",marginBottom:"10px"}}>
-          <input
-            type={showToken?"text":"password"}
-            style={{...inp(),paddingRight:"48px"}}
-            placeholder="ghp_xxxxxxxxxxxx"
-            value={ghToken}
-            onChange={e=>setGhToken(e.target.value)}
-            autoComplete="off"
-          />
-          <button style={{position:"absolute",right:"10px",top:"50%",transform:"translateY(-50%)",background:"none",border:"none",cursor:"pointer",fontSize:"1.1rem",color:C.darkGray}}
-            onClick={()=>setShowToken(v=>!v)} tabIndex={-1}>{showToken?"🙈":"👁"}</button>
-        </div>
-        <Btn bg={C.blue} fg="#fff" size="sm" onClick={testGitHub} disabled={testing||!ghOwner.trim()||!ghRepo.trim()}>
-          {testing?"テスト中...":"接続テスト"}
-        </Btn>
-        <div style={{marginTop:"8px",fontSize:"0.75rem",color:C.midGray}}>
-          ※ GitHub未設定でも内蔵データ25語でゲームは遊べます
-        </div>
-      </Card>
-
-      <Btn bg={C.green} fg={C.black} sh={C.black} size="lg" full onClick={handleSave}>
-        💾 設定を保存する
-      </Btn>
-      <div style={{marginTop:"8px",fontSize:"0.75rem",color:C.midGray,textAlign:"center"}}>
-        設定はブラウザのlocalStorageに保存されます。他の人には見えません。
-      </div>
-    </div>
-  </div>;
-}
-
-// ═══════════════════════════════════════════════════════════════
 // WordListScreen
 // ═══════════════════════════════════════════════════════════════
 function WordListScreen({db,sha,onSave,onBack}){
@@ -430,8 +261,7 @@ function WordListScreen({db,sha,onSave,onBack}){
   const [saving,setSaving]=useState(false); const [saveMsg,setSaveMsg]=useState(null);
   const [addMode,setAddMode]=useState(false); const [nw,setNw]=useState({word:"",reading:"",meaning:""});
 
-  const cfg=ghConfig();
-  const canWrite=!!(cfg.token&&ghReady(cfg));
+  const canWrite=true;
 
   const filtered=words.filter(w=>{
     const k=kw.trim().toLowerCase();
@@ -459,7 +289,7 @@ function WordListScreen({db,sha,onSave,onBack}){
     if(error){
       setSaveMsg({ok:false,text:`✗ 保存失敗: ${error}`});
     }else{
-      setSaveMsg({ok:true,text:"✓ GitHubに保存しました"});
+      setSaveMsg({ok:true,text:"✓ 保存しました"});
       onSave(newDb,newSha||sha);
     }
     setTimeout(()=>setSaveMsg(null),4000);
@@ -475,20 +305,17 @@ function WordListScreen({db,sha,onSave,onBack}){
         <div>
           <div style={{fontFamily:FD,fontSize:"2.5rem",color:C.black}}>単語データベース</div>
           <div style={{color:C.midGray,fontSize:"0.8rem"}}>{words.length}語 登録済み
-            {!canWrite&&<span style={{color:C.red}}> — GitHub PAT未設定（保存不可）</span>}
+            
           </div>
         </div>
         <div style={{display:"flex",gap:"8px",flexWrap:"wrap"}}>
           <Btn bg={canWrite?C.green:C.gray} fg={C.black} onClick={handleSave} disabled={saving||!canWrite}>
-            {saving?"保存中...":"💾 GitHubに保存"}
+            {saving?"保存中...":"💾 保存"}
           </Btn>
           <Btn bg={C.gray} fg={C.black} onClick={onBack}>← 戻る</Btn>
         </div>
       </div>
       {saveMsg&&<div style={{background:saveMsg.ok?C.green:C.red,color:saveMsg.ok?C.black:C.white,border:`3px solid ${C.black}`,padding:"10px 16px",marginBottom:"14px",fontWeight:"700"}}>{saveMsg.text}</div>}
-      {!canWrite&&<div style={{background:C.white,border:`2px solid ${C.black}`,padding:"10px 14px",marginBottom:"14px",fontSize:"0.82rem",color:C.darkGray}}>
-        ⚙ GitHub PAT が未設定のため保存できません。右上の <strong style={{color:C.black}}>⚙ 設定</strong> から PAT を登録してください。
-      </div>}
 
       <Card>
         <Lbl>◆ 検索・フィルター</Lbl>
@@ -577,47 +404,53 @@ function WordListScreen({db,sha,onSave,onBack}){
 // ═══════════════════════════════════════════════════════════════
 // TitleScreen
 // ═══════════════════════════════════════════════════════════════
-function TitleScreen({onStart,onWordList,onSettings,db,sha,onDbUpdate}){
+function TitleScreen({onStart,onWordList,db,sha,onDbUpdate}){
   // 初期の人数・名前はタイトル画面で決めたもの（1〜6人）
-  const [players,setPlayers]=useState(()=>Kit.players(Math.max(1,Math.min(6,Math.round(+Kit.settings.get().partySize)||1))).map(name=>({name})));
+  // 人数・名前はタイトル画面の共通設定から（1〜6人）
+  const rawParty=Math.round(+Kit.settings.get().partySize)||1;
+  const players=Kit.players(Math.max(1,Math.min(6,rawParty))).map(name=>({name}));
   const [rounds,setRounds]=useState(3);
   const [topicReading,setTopicReading]=useState("");
   const [generating,setGenerating]=useState(false);
   const [genLog,setGenLog]=useState("");
   const [errors,setErrors]=useState({});
 
-  const geminiKey=lsGet(LS.GEMINI_KEY);
-  const cfg=ghConfig();
+  const ai=Kit.ai.current();
+  const geminiKey=ai.ready; // 旧名のまま：選択中のAIが使えるか
 
-  const addPlayer=()=>{if(players.length<6)setPlayers(p=>{const c=Kit.players(p.length+1)[p.length];return [...p,{name:p.some(x=>x.name===c)?`プレイヤー${p.length+1}`:c}];});};
-  const removePlayer=i=>{if(players.length>1)setPlayers(p=>p.filter((_,idx)=>idx!==i));};
-  const updatePlayer=(i,v)=>setPlayers(p=>p.map((x,idx)=>idx===i?{...x,name:v}:x));
+  // 入力がないときのランダムなお題（同じ母音の言葉が他にもある言葉を優先）
+  const randomReading=()=>{
+    const ws=db.words||[];
+    const ok=ws.filter(w=>ws.some(x=>x.id!==w.id&&isSameVowel(x.reading,w.reading)&&!(x.reading===w.reading&&x.word===w.word)));
+    const pool=ok.length?ok:ws;
+    return pool.length?pool[Math.floor(Math.random()*pool.length)].reading:"";
+  };
 
   const prepareAndStart=async()=>{
-    const errs={};
-    players.forEach((p,i)=>{if(!p.name.trim())errs[`p${i}`]=true;});
-    if(!topicReading.trim())errs.tr=true;
-    setErrors(errs);
-    if(Object.keys(errs).length>0)return;
+    let reading=topicReading.trim();
+    if(!reading){ reading=randomReading(); if(!reading){Kit.toast("お題にできる言葉がありません");return;} setTopicReading(reading); Kit.SE.play("pop"); Kit.toast(`お題は「${reading}」`); }
+    setErrors({});
     setGenerating(true);
 
     // 1. 読み仮名からAIで単語・意味を取得
-    let topicWord=topicReading;
-    let topicMeaning=topicReading+"に関するもの";
-    if(geminiKey){
+    let topicWord=reading;
+    let topicMeaning=reading+"に関するもの";
+    const known=(db.words||[]).find(w=>w.reading===reading);
+    if(known){ topicWord=known.word; topicMeaning=known.meaning; }
+    else if(geminiKey){
       setGenLog("お題単語の情報をAIで生成中...");
-      const resolved=await aiResolveReading(topicReading);
+      const resolved=await aiResolveReading(reading);
       topicWord=resolved.word;
       topicMeaning=resolved.meaning;
     }
 
-    if(!geminiKey){const hit=(db.words||[]).find(w=>w.reading===topicReading);if(hit){topicWord=hit.word;topicMeaning=hit.meaning;}}
+    if(!geminiKey){const hit=(db.words||[]).find(w=>w.reading===reading);if(hit){topicWord=hit.word;topicMeaning=hit.meaning;}}
     let currentDb={...db,words:[...(db.words||[])],exhausted:{...(db.exhausted||{})}};
-    const vowelPat=getVowels(topicReading);
-    const alreadyIn=currentDb.words.find(w=>w.reading===topicReading&&w.word===topicWord);
-    if(!alreadyIn) currentDb.words.push({id:generateId(),word:topicWord,reading:topicReading,meaning:topicMeaning,charCount:countKana(topicReading)});
+    const vowelPat=getVowels(reading);
+    const alreadyIn=currentDb.words.find(w=>w.reading===reading&&w.word===topicWord);
+    if(!alreadyIn) currentDb.words.push({id:generateId(),word:topicWord,reading:reading,meaning:topicMeaning,charCount:countKana(reading)});
 
-    const existing=currentDb.words.filter(w=>isSameVowel(w.reading,topicReading)&&!(w.reading===topicReading&&w.word===topicWord));
+    const existing=currentDb.words.filter(w=>isSameVowel(w.reading,reading)&&!(w.reading===reading&&w.word===topicWord));
     const isExhausted=!!currentDb.exhausted?.[vowelPat];
     const needMore=existing.length<GENERATE_TARGET&&!isExhausted;
 
@@ -625,13 +458,13 @@ function TitleScreen({onStart,onWordList,onSettings,db,sha,onDbUpdate}){
       const needed=GENERATE_TARGET-existing.length;
       setGenLog(`同母音語を AI が生成中... (${needed}語追加予定)`);
       if(!geminiKey){
-        setGenLog("Gemini APIキー未設定 — 既存データでゲームを開始します");
+        setGenLog(`${ai.label}のAPIキー未設定 — 内蔵の言葉でゲームを開始します`);
         await new Promise(r=>setTimeout(r,600));
       }else{
-        const result=await aiGenerateHomovowels(topicReading,topicWord,existing,needed);
+        const result=await aiGenerateHomovowels(reading,topicWord,existing,needed);
         if(result.words?.length>0){
           result.words.forEach(w=>{
-            if(!isSameVowel(w.reading,topicReading))return;
+            if(!isSameVowel(w.reading,reading))return;
             if(!currentDb.words.find(x=>x.word===w.word&&x.reading===w.reading))
               currentDb.words.push({id:generateId(),word:w.word,reading:w.reading,meaning:w.meaning,charCount:countKana(w.reading)});
           });
@@ -647,18 +480,11 @@ function TitleScreen({onStart,onWordList,onSettings,db,sha,onDbUpdate}){
       await new Promise(r=>setTimeout(r,400));
     }
 
-    const pool=currentDb.words.filter(w=>isSameVowel(w.reading,topicReading)&&!(w.reading===topicReading&&w.word===topicWord));
+    const pool=currentDb.words.filter(w=>isSameVowel(w.reading,reading)&&!(w.reading===reading&&w.word===topicWord));
     setGenerating(false);
-    onStart({players,rounds,topic:{word:topicWord,reading:topicReading,meaning:topicMeaning},pool});
+    onStart({players,rounds,topic:{word:topicWord,reading:reading,meaning:topicMeaning},pool});
   };
 
-  const omakase=()=>{
-    const ws=db.words||[];
-    const ok=ws.filter(w=>ws.some(x=>x.id!==w.id&&isSameVowel(x.reading,w.reading)&&!(x.reading===w.reading&&x.word===w.word)));
-    if(!ok.length){Kit.toast("お題にできる言葉がありません");return;}
-    const w=ok[Math.floor(Math.random()*ok.length)];
-    setTopicReading(w.reading); Kit.SE.play("pop");
-  };
   const vowelPreview=topicReading?getVowels(topicReading):"";
   const dbCount=topicReading?(db.words||[]).filter(w=>isSameVowel(w.reading,topicReading)&&!(w.reading===topicReading&&w.word===topicReading)).length:0;
   const isExhausted=vowelPreview?!!db.exhausted?.[vowelPreview]:false;
@@ -668,18 +494,17 @@ function TitleScreen({onStart,onWordList,onSettings,db,sha,onDbUpdate}){
       <div style={{fontFamily:FD,fontSize:"clamp(4rem,16vw,7rem)",color:C.black,lineHeight:1,textShadow:"4px 4px 0 var(--k-pink),7px 7px 0 var(--k-teal)"}}>同母音</div>
       <div style={{fontFamily:FD,fontSize:"clamp(1.2rem,4.5vw,2rem)",color:C.black,letterSpacing:"0.08em"}}>同母音異義語ゲーム</div>
       <div style={{display:"flex",gap:"8px",justifyContent:"center",marginTop:"10px",flexWrap:"wrap"}}>
-        <Tag bg={geminiKey?C.green:C.red}>{geminiKey?"Gemini AI ✓":"⚠ APIキー未設定"}</Tag>
-        <Tag bg={(cfg.token&&ghReady(cfg))?C.green:C.gray}>{(cfg.token&&ghReady(cfg))?"GitHub DB ✓":"GitHub 未設定"}</Tag>
+        <Tag bg={geminiKey?C.green:C.red}>{geminiKey?`AI：${ai.label}（${ai.model}）`:`⚠ ${ai.label}のAPIキー未設定`}</Tag>
       </div>
     </div>
 
     <div style={{maxWidth:"600px",margin:"0 auto"}}>
       {/* お題 */}
       <Card bg={C.white} sh={C.red}>
-        <Lbl>◆ お題の読み仮名を入力</Lbl>
+        <Lbl>◆ お題の読み仮名（空のままならランダム）</Lbl>
         <input
           style={inp(errors.tr)}
-          placeholder="例: とざん（ひらがな・カタカナで入力）"
+          placeholder="例: とざん（空欄でスタートするとランダム）"
           value={topicReading}
           onChange={e=>setTopicReading(e.target.value)}
           onKeyDown={e=>e.key==="Enter"&&prepareAndStart()}
@@ -692,9 +517,8 @@ function TitleScreen({onStart,onWordList,onSettings,db,sha,onDbUpdate}){
           </Tag>
           {isExhausted&&<Tag bg={C.red}>上限記録済み</Tag>}
         </div>}
-        <div style={{marginTop:"10px",display:"flex",gap:"8px",alignItems:"center",flexWrap:"wrap"}}>
-          <Btn bg={C.green} fg="#fff" size="sm" onClick={omakase}>🎲 おまかせ</Btn>
-          <span style={{fontSize:"0.75rem",color:C.midGray}}>{geminiKey?"漢字・意味はAIが自動生成します。読み仮名だけでOK":"APIキーなしでも、おまかせなら内蔵の言葉で遊べます"}</span>
+        <div style={{marginTop:"8px",fontSize:"0.75rem",color:C.midGray}}>
+          {geminiKey?"漢字・意味・同じ母音の言葉はAIが用意します。読み仮名だけでOK":"APIキーがなくても、空欄でスタートすれば内蔵の言葉で遊べます"}
         </div>
       </Card>
 
@@ -707,17 +531,15 @@ function TitleScreen({onStart,onWordList,onSettings,db,sha,onDbUpdate}){
         </div>
       </Card>
 
-      {/* プレイヤー */}
+      {/* プレイヤー（共通設定） */}
       <Card>
-        <Lbl>◆ プレイヤー設定 ({players.length}人)</Lbl>
-        {players.map((p,i)=>(
-          <div key={i} style={{display:"flex",gap:"8px",marginBottom:"8px"}}>
-            <div style={{background:C.yellow,color:C.dark,padding:"8px 12px",border:`2px solid ${C.black}`,fontWeight:"700",minWidth:"36px",textAlign:"center"}}>{i+1}</div>
-            <input style={{...inp(errors[`p${i}`]),flex:1}} value={p.name} onChange={e=>updatePlayer(i,e.target.value)} placeholder={`プレイヤー${i+1}`}/>
-            {players.length>1&&<Btn bg={C.red} fg="#fff" size="sm" onClick={()=>removePlayer(i)}>✕</Btn>}
-          </div>
-        ))}
-        {players.length<6&&<Btn bg={C.gray} fg={C.black} size="sm" onClick={addPlayer}>＋ 追加</Btn>}
+        <Lbl>◆ 参加（{players.length}人）</Lbl>
+        <div style={{display:"flex",gap:"8px",flexWrap:"wrap"}}>
+          {players.map((p,i)=><Tag key={i} bg={i===0?C.yellow:C.gray}>{p.name}</Tag>)}
+        </div>
+        <div style={{marginTop:"8px",fontSize:"0.75rem",color:C.midGray}}>
+          {rawParty>6?`このゲームは1〜6人です。${players.length}人で遊びます。`:""}人数と名前はタイトルの「みんなで遊ぶ」で変えられます
+        </div>
       </Card>
 
       {generating&&<div style={{background:C.white,border:`3px solid ${C.black}`,padding:"14px 18px",marginBottom:"14px"}} className="blink">
@@ -727,9 +549,8 @@ function TitleScreen({onStart,onWordList,onSettings,db,sha,onDbUpdate}){
       <div style={{display:"flex",gap:"10px"}}>
         <div style={{flex:1}}><Btn bg={C.yellow} fg={C.black} sh={C.red} size="lg" full onClick={prepareAndStart} disabled={generating}>{generating?"準備中...":"ゲームスタート →"}</Btn></div>
         <Btn bg={C.blue} fg="#fff" size="lg" onClick={onWordList} title="単語リスト">📚</Btn>
-        <Btn bg={C.gray} fg={C.black} size="lg" onClick={onSettings} title="設定">⚙</Btn>
       </div>
-      <div style={{marginTop:"6px",fontSize:"0.72rem",color:C.midGray,textAlign:"right"}}>📚 単語リスト　⚙ API設定</div>
+      <div style={{marginTop:"6px",fontSize:"0.72rem",color:C.midGray,textAlign:"right"}}>📚 単語リスト</div>
     </div>
   </div>;
 }
@@ -772,8 +593,7 @@ function GameScreen({config,onFinish,resume}){
     const ans=pickAnswer();
     if(ans?.id)usedIds.current.add(ans.id);
     setCurrent(ans);
-    const geminiKey=lsGet(LS.GEMINI_KEY);
-    const h=geminiKey?await aiGenerateHint(ans.word,ans.reading):ans.meaning;
+    const h=aiReady()?await aiGenerateHint(ans.word,ans.reading):ans.meaning;
     setHint(h);
     setPhase("question");
   };
@@ -964,13 +784,12 @@ function App(){
   if(screen==="loading"||!db) return <div style={{minHeight:"100vh",background:"transparent",display:"flex",alignItems:"center",justifyContent:"center"}}>
     <div style={{textAlign:"center"}} className="blink">
       <div style={{fontFamily:FD,fontSize:"5rem",color:C.black}}>同母音</div>
-      <div style={{color:C.midGray,marginTop:"8px",fontSize:"0.9rem"}}>データベースを読み込み中...</div>
+      <div style={{color:C.midGray,marginTop:"8px",fontSize:"0.9rem"}}>準備中...</div>
     </div>
   </div>;
 
-  if(screen==="settings") return <SettingsScreen onBack={()=>setScreen("title")}/>;
   if(screen==="wordlist") return <WordListScreen db={db} sha={sha} onSave={handleWordListSave} onBack={()=>setScreen("title")}/>;
-  if(screen==="title")    return <TitleScreen onStart={handleStart} onWordList={()=>setScreen("wordlist")} onSettings={()=>setScreen("settings")} db={db} sha={sha} onDbUpdate={handleDbUpdate}/>;
+  if(screen==="title")    return <TitleScreen onStart={handleStart} onWordList={()=>setScreen("wordlist")} db={db} sha={sha} onDbUpdate={handleDbUpdate}/>;
   if(screen==="game")     return <GameScreen config={gameConfig} onFinish={handleFinish} resume={saved.current&&saved.current.game}/>;
   if(screen==="result")   return <ResultScreen scores={finalScores} history={finalHistory} players={gameConfig.players} config={gameConfig} onRestart={handleRestart}/>;
   return null;
