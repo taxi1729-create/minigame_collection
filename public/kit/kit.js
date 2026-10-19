@@ -382,13 +382,14 @@ const ai = (() => {
       throw new AIError(err.message || 'AIでエラーが起きました', err.detail || `HTTP ${res.status}`, res.status);
     }
     if(o.json && data && data.stop === 'max_tokens') throw new AIError('AIの返答が長すぎて途中で切れました。もう一度試してください', 'max_tokens');
-    return { text: (data && data.text) || '', sources: new Set((data && data.sources) || []) };
+    return { text: (data && data.text) || '', sources: new Set((data && data.sources) || []), provider: data && data.provider, model: data && data.model, fallback: !!(data && data.fallback) };
   }
   function httpErr(status, msg){
     msg = msg || '';
     if(status === 401 || status === 403) return new AIError('APIキーが正しくないようです（設定変更で確認してください）', `HTTP ${status} ${msg}`, status);
     if(status === 404) return new AIError('モデル名が見つかりません（設定変更のモデル名を確認してください）', `HTTP ${status} ${msg}`, status);
     if(status === 429) return new AIError('AIの利用上限か、混み合っています。少し待ってください', `HTTP ${status} ${msg}`, status);
+    if([500, 502, 503, 504, 529].includes(status)) return new AIError('AIが混み合っています。少し待ってからもう一度試してください', `HTTP ${status} ${msg}`, status);
     if(status === 400 && /credit|billing|balance|quota/i.test(msg)) return new AIError('APIの残高・請求設定を確認してください', msg, status);
     if(status === 400 && /model/i.test(msg)) return new AIError('モデル名が使えないようです（設定変更のモデル名を確認してください）', msg, status);
     return new AIError('AIでエラーが起きました', `HTTP ${status} ${msg}`, status);
@@ -485,7 +486,9 @@ const ai = (() => {
     if(!c.ready) throw new AIError(`使用するAI（${c.label}）のAPIキーが未設定です。タイトルの「設定変更」で入れてください`, 'no key');
     const r = c.via === 'server' ? await viaServer(c, o) : c.provider === 'gemini' ? await gemini(c, o) : await claude(c, o);
     if(!r.text) throw new AIError('AIが返答しませんでした。もう一度試してください', 'empty text');
-    const out = { text: r.text, sources: r.sources, provider: c.provider, model: c.model, via: c.via };
+    const used = r.provider || c.provider;
+    const out = { text: r.text, sources: r.sources, provider: used, model: r.model || c.model, via: c.via, fallback: !!r.fallback, label: AI_LABEL[used] || c.label };
+    if(r.fallback) toast(`${AI_LABEL[c.provider]}が混み合っていたので${AI_LABEL[used]}で作りました`, 2200);
     if(o.json) out.json = parseJson(r.text);
     return out;
   }

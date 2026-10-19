@@ -103,9 +103,31 @@ async function ai(request, env) {
     maxTokens: Math.max(1, Math.min(MAX_TOKENS, Math.round(+b.maxTokens) || 2000)),
     search: !!b.search,
   };
-  const r = provider === 'gemini' ? await callGemini(o, env) : await callClaude(o, env);
-  if (r.error) return json({ error: r.error }, r.status || 502);
-  return json({ text: r.text, sources: [...r.sources], provider, model: o.model, stop: r.stop || '' });
+  // 1) 混雑系のエラーは少し待って再試行
+  let used = provider, r = await withRetry(() => (provider === 'gemini' ? callGemini(o, env) : callClaude(o, env)));
+  // 2) それでもダメなら、もう一方のAI（サーバにキーがあれば）に切り替える。AI_FALLBACK="off" で無効
+  const other = provider === 'gemini' ? 'claude' : 'gemini';
+  if (r.error && BUSY.has(r.status) && str(env.AI_FALLBACK) !== 'off' && keyOf(other, env)) {
+    const o2 = Object.assign({}, o, { key: keyOf(other, env), model: modelOf(other, env) });
+    const r2 = await withRetry(() => (other === 'gemini' ? callGemini(o2, env) : callClaude(o2, env)), 1);
+    if (!r2.error) { used = other; r = r2; o.model = o2.model; }
+  }
+  if (r.error) {
+    if (BUSY.has(r.status)) r.error.message = 'AIが混み合っています。少し待ってからもう一度試してください';
+    return json({ error: r.error }, r.status || 502);
+  }
+  return json({ text: r.text, sources: [...r.sources], provider: used, model: o.model, fallback: used !== provider, stop: r.stop || '' });
+}
+
+// 混雑・一時的な障害（Anthropic の過負荷は 529）
+const BUSY = new Set([429, 500, 502, 503, 504, 529]);
+async function withRetry(fn, retries = 2) {
+  let r = await fn();
+  for (let i = 0; i < retries && r.error && BUSY.has(r.status); i++) {
+    await new Promise(res => setTimeout(res, 1200 * (i + 1) + Math.random() * 400));
+    r = await fn();
+  }
+  return r;
 }
 
 async function post(url, headers, body) {

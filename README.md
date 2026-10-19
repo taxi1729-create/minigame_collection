@@ -61,6 +61,7 @@ GitHub の `main` に push すると、Cloudflare が自動でビルド・公開
    | `GEMINI_API_KEY` | Secret | Gemini のAPIキー（使わないなら省略可） |
    | `AI_PROVIDER` | Text | `claude` または `gemini`（初期値） |
    | `CLAUDE_MODEL` / `GEMINI_MODEL` | Text | モデル名 |
+   | `AI_FALLBACK` | Text | `off` にすると、混雑時にもう一方のAIへ切り替えない（初期は切り替える） |
 
 3. **Cloudflare Access** でサイト全体をログイン制にする：Worker の **Settings → Domains & Routes** で workers.dev（とプレビューURL）の Cloudflare Access を有効にし、許可するメールアドレスをポリシーに追加する
 
@@ -70,7 +71,7 @@ GitHub の `main` に push すると、Cloudflare が自動でビルド・公開
 |---|---|
 | `GET /api/config` | サーバに登録されたAIの有無・モデル名（キーは返さない） |
 | `POST /api/auth` | 合言葉の確認（8回間違えると5分ロック） |
-| `POST /api/ai` | ヘッダ `x-game-passcode` が正しいときだけ、サーバのキーで Claude / Gemini に中継（`search:true` でWeb検索） |
+| `POST /api/ai` | ヘッダ `x-game-passcode` が正しいときだけ、サーバのキーで Claude / Gemini に中継（`search:true` でWeb検索）。混雑（429/5xx）は2回まで再試行し、だめならもう一方のAIに切り替え |
 
 ### 手元で試す
 

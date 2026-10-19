@@ -893,7 +893,7 @@ $('aiTest').addEventListener('click', async () => {
   try{
     const r = await Kit.ai.ask({ prompt: '動作確認です。「OK」とだけ返事してください。', maxTokens: 50 });
     out.classList.add('is-ok');
-    out.textContent = `成功（${((Date.now()-t0)/1000).toFixed(1)}秒）\n${r.label || c.label}（${r.model}）・${r.via === 'own' ? 'あなたのキー' : 'サーバのキー'}\n返事：${String(r.text).trim().slice(0, 60)}`;
+    out.textContent = `成功（${((Date.now()-t0)/1000).toFixed(1)}秒）\n${r.label || c.label}（${r.model}）・${r.via === 'own' ? 'あなたのキー' : 'サーバのキー'}${r.fallback ? `\n※${c.label}が混み合っていたため${r.label}に切り替えました` : ''}\n返事：${String(r.text).trim().slice(0, 60)}`;
     Kit.SE.play('ok');
   }catch(e){
     out.classList.add('is-ng');
