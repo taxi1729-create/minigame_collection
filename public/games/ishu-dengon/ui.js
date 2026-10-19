@@ -70,7 +70,7 @@ function renderSharedSettings() {
     const c = Kit.ai.current(), has = c.ready;
     ai.classList.toggle('is-on', has);
     ai.textContent = has ? `AI変換・答え判定：${c.label}（${c.model}）で使える`
-      : `AI変換は使えません（いま使うAIは${c.label}。タイトルの設定変更でAPIキーを入れると使えます）`;
+      : `AI変換は使えません（${Kit.ai.reason()}）`;
   }
 }
 

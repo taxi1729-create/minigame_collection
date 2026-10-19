@@ -152,15 +152,19 @@ async function callGemini(o, env) {
   const base = str(env.GEMINI_BASE_URL) || 'https://generativelanguage.googleapis.com';
   const headers = { 'content-type': 'application/json', 'x-goog-api-key': o.key };
   const sources = new Set();
-  const gen = { contents: [{ role: 'user', parts: [{ text: o.prompt }] }], generationConfig: { maxOutputTokens: o.maxTokens } };
+  // Gemini は思考トークンも出力上限に数える。小さい上限だと考えるだけで終わって返答が空になるので、余裕を持たせる
+  const gen = { contents: [{ role: 'user', parts: [{ text: o.prompt }] }], generationConfig: { maxOutputTokens: Math.max(8192, o.maxTokens * 4) } };
   if (o.system) gen.systemInstruction = { parts: [{ text: o.system }] };
   if (o.search) gen.tools = [{ google_search: {} }];
   let r = await post(`${base}/v1beta/models/${encodeURIComponent(o.model)}:generateContent`, headers, gen);
   if (!r.error) {
     const cand = (r.data.candidates || [])[0];
-    if (!cand) return { error: { message: 'AIが返答しませんでした' }, status: 502 };
+    const block = r.data.promptFeedback && r.data.promptFeedback.blockReason;
+    if (!cand) return { error: { message: block ? 'AIが内容を理由に返答しませんでした' : 'AIが返答しませんでした', detail: block || 'candidates が空' }, status: 502 };
     (((cand.groundingMetadata || {}).groundingChunks) || []).forEach(g => { if (g.web && g.web.uri) sources.add(g.web.uri); });
-    return { text: ((cand.content && cand.content.parts) || []).map(p => p.text || '').join(''), sources, stop: cand.finishReason || '' };
+    const text = ((cand.content && cand.content.parts) || []).filter(p => !p.thought).map(p => p.text || '').join('');
+    if (!text) return { error: { message: 'AIの返答が空でした。もう一度試してください', detail: `finishReason: ${cand.finishReason || '不明'}` }, status: 502 };
+    return { text, sources, stop: cand.finishReason === 'MAX_TOKENS' ? 'max_tokens' : (cand.finishReason || '') };
   }
   if (r.status !== 404) return r;
   const it = { model: o.model, input: o.prompt };

@@ -216,6 +216,9 @@ details.k-more summary{cursor:pointer;font-weight:900;font-size:13px;color:var(-
 .sheet .who{font-size:13px;font-weight:900;color:var(--k-ink2);margin:0 0 12px;line-height:1.5}
 footer.hub-foot{text-align:center;color:var(--k-ink2);font-size:12px;padding:0 16px 40px}
 /* ---- AI選択 ---- */
+.ai-test{margin:8px 0 0;padding:8px 10px;border:2px solid var(--k-ink);border-radius:10px;background:var(--k-label2);font:700 13px/1.6 var(--k-body);white-space:pre-wrap;word-break:break-all}
+.ai-test.is-ok{border-color:var(--k-teal);background:color-mix(in srgb,var(--k-teal) 10%,var(--k-label))}
+.ai-test.is-ng{border-color:var(--k-pink);background:color-mix(in srgb,var(--k-pink) 8%,var(--k-label))}
 .own-note{font-family:var(--k-body);font-weight:900;font-size:12px;color:var(--k-ink2);margin-left:6px}
 .ai-ok{margin:6px 0 8px;font-weight:900;color:var(--k-teal)}
 .ai-server .inline{display:flex;gap:8px}
@@ -312,6 +315,11 @@ footer.hub-foot{text-align:center;color:var(--k-ink2);font-size:12px;padding:0 1
             <button type="button" role="radio" data-ai="gemini" data-se="select">Gemini</button>
           </div>
           <p class="ai-now" id="aiNow" aria-live="polite"></p>
+          <div class="inline" style="margin-top:8px">
+            <button class="k-btn k-btn--sm" id="aiTest" type="button">AIの接続テスト</button>
+            <span class="k-hint" style="margin:0">うまく動かないときに押してください</span>
+          </div>
+          <pre class="ai-test" id="aiTestOut" hidden></pre>
         </div>
         <div class="ai-box ai-server" id="srvBox" hidden>
           <b class="ai-box__name">サーバのAI</b>
@@ -877,6 +885,22 @@ $('srvUnlock').addEventListener('click', async () => {
   drawAI();
 });
 $('srvPass').addEventListener('keydown', e => { if(e.key === 'Enter' && !e.isComposing) $('srvUnlock').click(); });
+$('aiTest').addEventListener('click', async () => {
+  const out = $('aiTestOut'), b = $('aiTest'), c = Kit.ai.current();
+  out.hidden = false; out.className = 'ai-test'; b.disabled = true;
+  out.textContent = `${c.label}（${c.model}）・${c.via === 'own' ? 'あなたのキー' : c.via === 'server' ? 'サーバのキー' : 'キーなし'} で接続しています…`;
+  const t0 = Date.now();
+  try{
+    const r = await Kit.ai.ask({ prompt: '動作確認です。「OK」とだけ返事してください。', maxTokens: 50 });
+    out.classList.add('is-ok');
+    out.textContent = `成功（${((Date.now()-t0)/1000).toFixed(1)}秒）\n${r.label || c.label}（${r.model}）・${r.via === 'own' ? 'あなたのキー' : 'サーバのキー'}\n返事：${String(r.text).trim().slice(0, 60)}`;
+    Kit.SE.play('ok');
+  }catch(e){
+    out.classList.add('is-ng');
+    out.textContent = `失敗：${(e && e.message) || e}\n詳細：${(e && e.detail) || '-'}${e && e.status ? `（HTTP ${e.status}）` : ''}\n使用：${c.label}（${c.model}）・${c.via === 'own' ? 'あなたのキー' : c.via === 'server' ? 'サーバのキー' : 'キーなし'}`;
+    Kit.SE.play('ng');
+  }finally{ b.disabled = false; }
+});
 $('srvLock').addEventListener('click', () => { Kit.ai.lock(); drawAI(); Kit.toast('合言葉を消しました'); });
 Kit.onChange(r => { if(r === 'settings') drawAI(); });
 document.querySelector('.ai-pick').addEventListener('click', e => {

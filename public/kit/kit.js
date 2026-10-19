@@ -445,14 +445,17 @@ const ai = (() => {
     const headers = { 'content-type': 'application/json', 'x-goog-api-key': c.key };
     const sources = new Set();
     const viaGenerate = async () => {
-      const body = { contents: [{ role: 'user', parts: [{ text: o.prompt }] }], generationConfig: { maxOutputTokens: o.maxTokens || 2000 } };
+      // 思考トークンも上限に数えられるため、余裕を持たせる
+      const body = { contents: [{ role: 'user', parts: [{ text: o.prompt }] }], generationConfig: { maxOutputTokens: Math.max(8192, (o.maxTokens || 2000) * 4) } };
       if(o.system) body.systemInstruction = { parts: [{ text: o.system }] };
       if(o.search) body.tools = [{ google_search: {} }];
       const data = await post(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(c.model)}:generateContent`, headers, body, o.signal);
       const cand = (data.candidates || [])[0];
-      if(!cand) throw new AIError('AIが返答しませんでした。もう一度試してください', 'candidates が空');
+      if(!cand) throw new AIError('AIが返答しませんでした。もう一度試してください', (data.promptFeedback && data.promptFeedback.blockReason) || 'candidates が空');
       (((cand.groundingMetadata || {}).groundingChunks) || []).forEach(g => { if(g.web && g.web.uri) sources.add(g.web.uri); });
-      return ((cand.content && cand.content.parts) || []).map(p => p.text || '').join('');
+      const t = ((cand.content && cand.content.parts) || []).filter(p => !p.thought).map(p => p.text || '').join('');
+      if(!t) throw new AIError('AIの返答が空でした。もう一度試してください', `finishReason: ${cand.finishReason || '不明'}`);
+      return t;
     };
     const viaInteractions = async () => {
       const body = { model: c.model, input: o.prompt };
@@ -486,7 +489,14 @@ const ai = (() => {
     if(o.json) out.json = parseJson(r.text);
     return out;
   }
-  return { ask, current, parseJson, refreshServer, unlock, lock, server, Error: AIError, DEFAULT_MODELS: AI_DEFAULT_MODELS, LABEL: AI_LABEL };
+  // AIが使えない理由（画面にそのまま出せる短い文）。使えるなら ''
+  function reason(){
+    const c = current();
+    if(c.ready) return '';
+    if(c.via === 'server') return '合言葉が未入力です。タイトルの「設定変更」で合言葉を入れるとAIが使えます';
+    return `${c.label}のAPIキーが未設定です。タイトルの「設定変更」で入れるとAIが使えます`;
+  }
+  return { ask, current, reason, parseJson, refreshServer, unlock, lock, server, Error: AIError, DEFAULT_MODELS: AI_DEFAULT_MODELS, LABEL: AI_LABEL };
 })();
 // ページを開くたびにサーバのAI設定を確認（Worker が無ければ何もしない）
 if(typeof location !== 'undefined' && /^https?:$/.test(location.protocol)) setTimeout(() => ai.refreshServer(), 0);

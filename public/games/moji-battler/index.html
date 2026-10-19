@@ -450,7 +450,7 @@ function drawSetup(){
   $('lenSeg').querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.v === S.length)));
   $('lenHint').textContent = LEN[S.length].hint;
   const c = Kit.ai.current();
-  $('aiLine').textContent = c.ready ? `${c.label}（${c.model}）でキャラと実況を作ります` : `${c.label}のAPIキーが未設定です`;
+  $('aiLine').textContent = c.ready ? `${c.label}（${c.model}）でキャラと実況を作ります` : Kit.ai.reason();
   $('aiLine').classList.toggle('warn', !c.ready);
   $('aiHint').textContent = c.ready ? '使うAIはタイトルの「設定変更」で切り替えられます。' : 'このままでも「AIなしの簡易モード」で遊べます。タイトルの「設定変更」でキーを入れると、AIがキャラと実況を作ります。';
 }

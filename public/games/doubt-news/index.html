@@ -398,7 +398,7 @@ let abortCtl = null;
 /* 必要な問題数そろうまで取得（最大3回） */
 async function ensureNews(needed, force, onStep){
   const ai = Kit.ai.current();
-  if(!ai.ready) throw new NewsError(`使用するAI（${ai.label}）のAPIキーが未設定です`);
+  if(!ai.ready) throw new NewsError(Kit.ai.reason());
   let c = getCache();
   if(force || !isFresh(c)) c = { fetchedAt: 0, provider: '', items: [], fakes: [], used: [] };
   for(let attempt=1; available(c) < needed && attempt <= 3; attempt++){
@@ -440,7 +440,7 @@ function drawSetup(){
   $('lapsHint').textContent = `1周＝3問。${S.laps}周で全${S.laps*PER_LAP}問です。`;
   const c = getCache(), need = S.laps*PER_LAP;
   if(!hasKey()){
-    $('newsBox').innerHTML = `<div class="warn">ニュースの取得にはAIのAPIキーが必要です。いま使うAIは ${esc(Kit.ai.current().label)} です。タイトルの「設定変更」でキーを入れてください。</div>
+    $('newsBox').innerHTML = `<div class="warn">ニュースの取得にはAIが必要です。${esc(Kit.ai.reason())}。</div>
       <div class="btnrow"><a class="k-btn k-btn--teal k-btn--sm" href="../../index.html#settings">設定変更を開く</a>
       <button class="k-btn k-btn--yellow k-btn--sm" id="btnPractice" type="button">練習モード（サンプルニュース）</button></div>
       <p class="k-hint">練習モードは架空のサンプル3問（1周）で遊べます。</p>`;

@@ -515,7 +515,7 @@ function renderAll(){ renderEpisode(); renderElements(); renderControls(); rende
 // APIキーはタイトルの「設定変更」で入れたものを使う（このゲームに入力欄はない）
 const drawKeyState = () => { const c = Kit.ai.current(); $('keyState').textContent = c.ready
   ? `使うAI：${c.label}（${c.model}）`
-  : `使うAI（${c.label}）のAPIキーが未設定です。タイトルの「設定変更」で入れると使えます。`; };
+  : Kit.ai.reason() + '。'; };
 drawKeyState();
 
 
@@ -524,7 +524,7 @@ function setMsg(t, err){ const m = $('customMsg'); m.textContent = t; m.classLis
 async function extract(){
   const lines = $('customText').value.split(/\r?\n/).map(s=>s.trim()).filter(Boolean);
   if(lines.length !== 3){ setMsg(`エピソードは三行で書いてください（いま${lines.length}行）。`, true); return; }
-  if(!Kit.ai.current().ready){ $('apiDetails').open = true; drawKeyState(); setMsg(`使うAI（${Kit.ai.current().label}）のAPIキーが未設定です。タイトルの「設定変更」で入れてください。`, true); return; }
+  if(!Kit.ai.current().ready){ $('apiDetails').open = true; drawKeyState(); setMsg(Kit.ai.reason() + '。', true); return; }
 
   const btn = $('btnExtract'); btn.disabled = true; setMsg(`⏳ ${Kit.ai.current().label} がトーク要素を抜き出しています…`);
   const system = 'あなたは日本語の品詞分析アシスタントです。与えられた三部構成のエピソードから、パーティゲームで使う「トーク要素」を抜き出し、指定のJSONのみを出力します。前置きや説明、コードブロックは書きません。';

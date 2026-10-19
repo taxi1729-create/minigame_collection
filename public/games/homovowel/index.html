@@ -458,7 +458,7 @@ function TitleScreen({onStart,onWordList,db,sha,onDbUpdate}){
       const needed=GENERATE_TARGET-existing.length;
       setGenLog(`同母音語を AI が生成中... (${needed}語追加予定)`);
       if(!geminiKey){
-        setGenLog(`${ai.label}のAPIキー未設定 — 内蔵の言葉でゲームを開始します`);
+        setGenLog(`AIが使えないため内蔵の言葉で開始します（${Kit.ai.reason()}）`);
         await new Promise(r=>setTimeout(r,600));
       }else{
         const result=await aiGenerateHomovowels(reading,topicWord,existing,needed);
@@ -494,7 +494,7 @@ function TitleScreen({onStart,onWordList,db,sha,onDbUpdate}){
       <div style={{fontFamily:FD,fontSize:"clamp(4rem,16vw,7rem)",color:C.black,lineHeight:1,textShadow:"4px 4px 0 var(--k-pink),7px 7px 0 var(--k-teal)"}}>同母音</div>
       <div style={{fontFamily:FD,fontSize:"clamp(1.2rem,4.5vw,2rem)",color:C.black,letterSpacing:"0.08em"}}>同母音異義語ゲーム</div>
       <div style={{display:"flex",gap:"8px",justifyContent:"center",marginTop:"10px",flexWrap:"wrap"}}>
-        <Tag bg={geminiKey?C.green:C.red}>{geminiKey?`AI：${ai.label}（${ai.model}）`:`⚠ ${ai.label}のAPIキー未設定`}</Tag>
+        <Tag bg={geminiKey?C.green:C.red}>{geminiKey?`AI：${ai.label}（${ai.model}）`:(ai.via==='server'?'⚠ 合言葉が未入力（AIなし）':`⚠ ${ai.label}のAPIキー未設定`)}</Tag>
       </div>
     </div>
 

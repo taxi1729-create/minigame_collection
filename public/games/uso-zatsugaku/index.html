@@ -234,6 +234,7 @@ function drawStart(){
   $('lapsHint').textContent = `${S.laps}周 ＝ 全${S.laps*PER_LAP}問`;
   const k = hasKey();
   $('aiOn').hidden = !k; $('aiOff').hidden = k;
+  if(!k) $('aiOff').textContent = Kit.ai.reason() + '。';
   { const c = Kit.ai.current(); $('aiWho').textContent = `（${c.label}：${c.model}）`; }
   $('aiChk').checked = k && !!Kit.store.get(ID + '.ai', false);
 }
