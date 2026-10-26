@@ -28,6 +28,17 @@
 | いろことば | 1人 | 文字ではなくインクの色を答える30秒チャレンジ |
 | すべらせパズル | 1人 | 3×3 / 4×4 のスライドパズル |
 
+## 音楽
+
+| 場面 | 曲 | ファイル |
+|---|---|---|
+| ホーム画面 | Sunday Morning Quest | `public/audio/home.mp3` |
+| ミニゲーム中 | High Score Velocity | `public/audio/play.mp3` |
+| 成功ジングル | Crown of Coins（冒頭12秒） | `public/audio/win.mp3` |
+| 失敗ジングル | Coffee and High Scores（冒頭12秒） | `public/audio/lose.mp3` |
+
+曲が切り替わるときは必ず頭から再生。ジングルの後はミニゲームの曲に頭から戻る。`Kit.mount()` で自動的にミニゲームの曲、`Kit.celebrate()` / `Kit.fail()` でジングル。音量は設定変更の「音楽の音量」、ミュートは音楽と効果音の両方。
+
 ## AI
 
 AIを使うゲーム（同母音異義語・嘘雑学クイズ・ダウトニュース・異種伝言・無言トーク・文字バトラー）は、設定変更で選んだAIとモデルで動きます。
@@ -62,8 +73,18 @@ GitHub の `main` に push すると、Cloudflare が自動でビルド・公開
    | `AI_PROVIDER` | Text | `claude` または `gemini`（初期値） |
    | `CLAUDE_MODEL` / `GEMINI_MODEL` | Text | モデル名（未設定なら `claude-sonnet-5-5` / `gemini-3.5-flash-lite`） |
    | `AI_FALLBACK` | Text | `off` にすると、混雑時にもう一方のAIへ切り替えない（初期は切り替える） |
+   | `GUEST_DAILY_LIMIT` | Text | ログインしていない人のAI利用回数（サイト全体で1日あたり、日本時間0時にリセット）。初期30 |
+   | `GOOGLE_CLIENT_ID` | Text | Googleログイン用のクライアントID |
+   | `ALLOWED_EMAILS` | Text | 無制限にするGmail（カンマ区切り） |
+   | `SESSION_SECRET` | Secret | ログイン状態の署名に使うランダムな長い文字列 |
 
-3. **Cloudflare Access** でサイト全体をログイン制にする：Worker の **Settings → Domains & Routes** で workers.dev（とプレビューURL）の Cloudflare Access を有効にし、許可するメールアドレスをポリシーに追加する
+3. **Googleログイン**：Google Cloud Console → APIとサービス → 認証情報 → 「OAuth クライアント ID」（ウェブ アプリケーション）を作り、「承認済みの JavaScript 生成元」に公開URL（例 `https://asobibiako.magnet1729.workers.dev`）を追加。表示されたクライアントIDを `GOOGLE_CLIENT_ID` に登録する
+
+### 利用制限
+
+- **ログインなし（ゲスト）**：合言葉が必要。AIはサイト全体で1日 `GUEST_DAILY_LIMIT` 回まで（失敗した呼び出しは数えない）
+- **許可したGmailでログイン**：合言葉なし・回数無制限（ログインは30日有効。`ALLOWED_EMAILS` から外すと即無効）
+- 回数は Durable Object（`UsageCounter`）で数える。`wrangler.jsonc` に設定済みなので、追加の作業は不要
 
 ### API
 
@@ -71,6 +92,7 @@ GitHub の `main` に push すると、Cloudflare が自動でビルド・公開
 |---|---|
 | `GET /api/config` | サーバに登録されたAIの有無・モデル名（キーは返さない） |
 | `POST /api/auth` | 合言葉の確認（8回間違えると5分ロック） |
+| `POST /api/login` / `POST /api/logout` | Googleログイン（IDトークンを検証し、許可したGmailならログイン用Cookieを発行） |
 | `POST /api/ai` | ヘッダ `x-game-passcode` が正しいときだけ、サーバのキーで Claude / Gemini に中継（`search:true` でWeb検索）。混雑（429/5xx）は2回まで再試行し、だめならもう一方のAIに切り替え |
 
 ### 手元で試す

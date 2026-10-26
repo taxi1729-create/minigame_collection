@@ -16,5 +16,10 @@
   "keep_vars": true,
   // 秘密の値（GAME_PASSCODE / CLAUDE_API_KEY / GEMINI_API_KEY）は
   // Cloudflare の画面（Secret）か `npx wrangler secret put 名前` で登録する。ここには書かない。
+  // ゲストのAI利用回数（サイト全体で1日◯回）を数える Durable Object
+  "durable_objects": {
+    "bindings": [{ "name": "USAGE", "class_name": "UsageCounter" }]
+  },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["UsageCounter"] }],
   "observability": { "enabled": true }
 }

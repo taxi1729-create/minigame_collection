@@ -4,6 +4,12 @@
 GAME_PASSCODE="ここに合言葉"
 CLAUDE_API_KEY="sk-ant-..."
 GEMINI_API_KEY="AIza..."
+# Googleログイン（許可したGmailはAI無制限）
+SESSION_SECRET="ランダムな長い文字列"
+GOOGLE_CLIENT_ID="xxxxxxxx.apps.googleusercontent.com"
+ALLOWED_EMAILS="you@gmail.com, friend@gmail.com"
+# ゲスト（ログインなし）のAI利用回数：サイト全体で1日あたり
+GUEST_DAILY_LIMIT="30"
 # 秘密でない設定（wrangler.jsonc の vars を上書きしたいときだけ）
 # AI_PROVIDER="claude"
 # CLAUDE_MODEL="claude-sonnet-5-5"

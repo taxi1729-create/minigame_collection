@@ -2,11 +2,15 @@
    あそびばこ — Cloudflare Worker
    - /api/config : サーバに登録されたAIの有無・モデル名（秘密は返さない）
    - /api/auth   : 合言葉の確認
-   - /api/ai     : 合言葉つきのリクエストだけ、サーバのAPIキーで Claude / Gemini に中継
+   - /api/login  : Googleログイン（許可したGmailだけ。ログイン中はAI無制限）
+   - /api/logout : ログアウト
+   - /api/ai     : サーバのAPIキーで Claude / Gemini に中継
+                   ログイン中 → 無制限 ／ ログインなし → 合言葉＋サイト全体で1日 GUEST_DAILY_LIMIT 回まで
    - それ以外    : public/ の静的ファイル（env.ASSETS）
    環境変数（Cloudflare の Worker → Settings → Variables and Secrets）
-     Secret : GAME_PASSCODE, CLAUDE_API_KEY, GEMINI_API_KEY
-     Text   : AI_PROVIDER（claude|gemini）, CLAUDE_MODEL, GEMINI_MODEL
+     Secret : GAME_PASSCODE, CLAUDE_API_KEY, GEMINI_API_KEY, SESSION_SECRET
+     Text   : AI_PROVIDER（claude|gemini）, CLAUDE_MODEL, GEMINI_MODEL,
+              GOOGLE_CLIENT_ID, ALLOWED_EMAILS（カンマ区切り）, GUEST_DAILY_LIMIT（初期30）
    ========================================================= */
 
 const DEFAULT_MODELS = { claude: 'claude-sonnet-5-5', gemini: 'gemini-3.5-flash-lite' };
@@ -21,8 +25,10 @@ export default {
     const url = new URL(request.url);
     if (!url.pathname.startsWith('/api/')) return env.ASSETS.fetch(request);
     try {
-      if (url.pathname === '/api/config' && request.method === 'GET') return config(env);
+      if (url.pathname === '/api/config' && request.method === 'GET') return config(request, env);
       if (url.pathname === '/api/auth' && request.method === 'POST') return auth(request, env);
+      if (url.pathname === '/api/login' && request.method === 'POST') return login(request, env);
+      if (url.pathname === '/api/logout' && request.method === 'POST') return logout(request);
       if (url.pathname === '/api/ai' && request.method === 'POST') return ai(request, env);
       return json({ error: { message: '見つかりません' } }, 404);
     } catch (e) {
@@ -32,10 +38,10 @@ export default {
 };
 
 /* ---------- 共通 ---------- */
-function json(body, status = 200) {
+function json(body, status = 200, extraHeaders = {}) {
   return new Response(JSON.stringify(body), {
     status,
-    headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' },
+    headers: Object.assign({ 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' }, extraHeaders),
   });
 }
 const str = v => (typeof v === 'string' ? v.trim() : '');
@@ -69,13 +75,137 @@ async function checkPasscode(request, env, given) {
   return null;
 }
 
+/* =========================================================
+   ログイン（Google）とセッション
+   ========================================================= */
+const SESSION_COOKIE = 'asb_s', SESSION_DAYS = 30;
+const loginEnabled = env => !!(str(env.GOOGLE_CLIENT_ID) && str(env.SESSION_SECRET));
+const allowed = env => str(env.ALLOWED_EMAILS).toLowerCase().split(/[\s,]+/).filter(Boolean);
+const b64u = buf => btoa(String.fromCharCode(...new Uint8Array(buf))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+const unb64u = s => Uint8Array.from(atob(s.replace(/-/g, '+').replace(/_/g, '/') + '==='.slice((s.length + 3) % 4)), c => c.charCodeAt(0));
+const utf8 = s => new TextEncoder().encode(s);
+
+async function hmacKey(env) {
+  return crypto.subtle.importKey('raw', utf8(str(env.SESSION_SECRET)), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign', 'verify']);
+}
+async function makeSession(env, email) {
+  const payload = b64u(utf8(JSON.stringify({ e: email, x: Date.now() + SESSION_DAYS * 864e5 })));
+  const sig = b64u(await crypto.subtle.sign('HMAC', await hmacKey(env), utf8(payload)));
+  return `${payload}.${sig}`;
+}
+function readCookie(request, name) {
+  const m = (request.headers.get('cookie') || '').match(new RegExp('(?:^|;\\s*)' + name + '=([^;]+)'));
+  return m ? m[1] : '';
+}
+// ログイン中なら { email }、そうでなければ null
+async function sessionUser(request, env) {
+  if (!loginEnabled(env)) return null;
+  const v = readCookie(request, SESSION_COOKIE);
+  const [payload, sig] = v.split('.');
+  if (!payload || !sig) return null;
+  try {
+    const ok = await crypto.subtle.verify('HMAC', await hmacKey(env), unb64u(sig), utf8(payload));
+    if (!ok) return null;
+    const p = JSON.parse(new TextDecoder().decode(unb64u(payload)));
+    if (!p.e || !p.x || p.x < Date.now()) return null;
+    if (!allowed(env).includes(String(p.e).toLowerCase())) return null; // 許可リストから外されたら即無効
+    return { email: p.e };
+  } catch (e) { return null; }
+}
+function cookieHeader(request, value, maxAge) {
+  const secure = new URL(request.url).protocol === 'https:' ? '; Secure' : '';
+  return `${SESSION_COOKIE}=${value}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${maxAge}${secure}`;
+}
+
+// Google の IDトークン（JWT, RS256）を検証
+let jwksCache = { at: 0, keys: [] };
+async function googleKeys(env, force) {
+  if (!force && jwksCache.keys.length && Date.now() - jwksCache.at < 3600e3) return jwksCache.keys;
+  const res = await fetch(str(env.GOOGLE_CERTS_URL) || 'https://www.googleapis.com/oauth2/v3/certs');
+  const data = await res.json();
+  jwksCache = { at: Date.now(), keys: Array.isArray(data.keys) ? data.keys : [] };
+  return jwksCache.keys;
+}
+async function verifyGoogleToken(token, env) {
+  const parts = String(token || '').split('.');
+  if (parts.length !== 3) throw new Error('トークンの形が違います');
+  const header = JSON.parse(new TextDecoder().decode(unb64u(parts[0])));
+  const claims = JSON.parse(new TextDecoder().decode(unb64u(parts[1])));
+  if (header.alg !== 'RS256') throw new Error('署名方式が違います');
+  let jwk = (await googleKeys(env)).find(k => k.kid === header.kid);
+  if (!jwk) jwk = (await googleKeys(env, true)).find(k => k.kid === header.kid); // 鍵の入れ替わり
+  if (!jwk) throw new Error('署名の鍵が見つかりません');
+  const key = await crypto.subtle.importKey('jwk', jwk, { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' }, false, ['verify']);
+  const ok = await crypto.subtle.verify('RSASSA-PKCS1-v1_5', key, unb64u(parts[2]), utf8(parts[0] + '.' + parts[1]));
+  if (!ok) throw new Error('署名が正しくありません');
+  if (!['accounts.google.com', 'https://accounts.google.com'].includes(claims.iss)) throw new Error('発行元が違います');
+  if (claims.aud !== str(env.GOOGLE_CLIENT_ID)) throw new Error('このサイト向けのトークンではありません');
+  if (!claims.exp || claims.exp * 1000 < Date.now() - 60e3) throw new Error('トークンの期限切れです');
+  if (claims.email_verified !== true && claims.email_verified !== 'true') throw new Error('メールアドレスが確認されていません');
+  return { email: String(claims.email || '').toLowerCase(), name: claims.name || '' };
+}
+
+/* ---------- /api/login ・ /api/logout ---------- */
+async function login(request, env) {
+  if (!loginEnabled(env)) return json({ error: { message: 'ログインは設定されていません' } }, 503);
+  const b = await request.json().catch(() => ({}));
+  let who;
+  try { who = await verifyGoogleToken(b && b.credential, env); }
+  catch (e) { return json({ error: { message: 'Googleログインを確認できませんでした', detail: e.message } }, 401); }
+  if (!allowed(env).includes(who.email)) {
+    return json({ error: { message: `${who.email} は無制限の対象ではありません。ゲストとして遊べます`, code: 'not_allowed' } }, 403);
+  }
+  const token = await makeSession(env, who.email);
+  return json({ ok: true, email: who.email }, 200, { 'set-cookie': cookieHeader(request, token, SESSION_DAYS * 86400) });
+}
+function logout(request) {
+  return json({ ok: true }, 200, { 'set-cookie': cookieHeader(request, '', 0) });
+}
+
+/* =========================================================
+   ゲストの利用回数（サイト全体で1日◯回。日本時間の0時にリセット）
+   ========================================================= */
+const guestLimit = env => { const n = parseInt(str(env.GUEST_DAILY_LIMIT), 10); return n >= 0 ? n : 30; };
+const jstDay = () => new Date(Date.now() + 9 * 3600e3).toISOString().slice(0, 10);
+async function usage(env, op) {
+  if (!env.USAGE) return { ok: false, used: 0, error: 'no_counter' };
+  const stub = env.USAGE.get(env.USAGE.idFromName('guest'));
+  const res = await stub.fetch('https://usage/' + op, { method: 'POST', body: JSON.stringify({ day: jstDay(), limit: guestLimit(env) }) });
+  return res.json();
+}
+
+// 1日の回数を数える Durable Object（1つだけ使う。処理が1つずつ順に走るので数え漏れがない）
+export class UsageCounter {
+  constructor(state) { this.state = state; }
+  async fetch(request) {
+    const op = new URL(request.url).pathname.slice(1);
+    const { day, limit } = await request.json();
+    let rec = (await this.state.storage.get('rec')) || { day, n: 0 };
+    if (rec.day !== day) rec = { day, n: 0 }; // 日付が変わったらリセット
+    if (op === 'take') {
+      if (rec.n >= limit) return Response.json({ ok: false, used: rec.n, limit });
+      rec.n++; await this.state.storage.put('rec', rec);
+      return Response.json({ ok: true, used: rec.n, limit });
+    }
+    if (op === 'refund') { rec.n = Math.max(0, rec.n - 1); await this.state.storage.put('rec', rec); }
+    return Response.json({ ok: true, used: rec.n, limit });
+  }
+}
+
 /* ---------- /api/config ---------- */
-function config(env) {
+async function config(request, env) {
+  const user = await sessionUser(request, env);
+  const limit = guestLimit(env);
+  let used = 0;
+  try { used = (await usage(env, 'get')).used || 0; } catch (e) {}
   return json({
     provider: providerOf('', env),
     server: { claude: !!keyOf('claude', env), gemini: !!keyOf('gemini', env) },
     models: { claude: modelOf('claude', env), gemini: modelOf('gemini', env) },
     passcode: !!str(env.GAME_PASSCODE),
+    login: { enabled: loginEnabled(env), clientId: loginEnabled(env) ? str(env.GOOGLE_CLIENT_ID) : '' },
+    user: user ? { email: user.email, unlimited: true } : null,
+    guest: { limit, used, remaining: Math.max(0, limit - used) },
   });
 }
 
@@ -88,8 +218,12 @@ async function auth(request, env) {
 
 /* ---------- /api/ai ---------- */
 async function ai(request, env) {
-  const ng = await checkPasscode(request, env, request.headers.get('x-game-passcode'));
-  if (ng) return ng;
+  // ログイン中（許可したGmail）は合言葉も回数制限もなし
+  const user = await sessionUser(request, env);
+  if (!user) {
+    const ng = await checkPasscode(request, env, request.headers.get('x-game-passcode'));
+    if (ng) return ng;
+  }
   const b = await request.json().catch(() => null);
   if (!b || typeof b.prompt !== 'string' || !b.prompt.trim()) return json({ error: { message: 'リクエストの形がおかしいです' } }, 400);
   if (b.prompt.length > MAX_PROMPT || (b.system && String(b.system).length > MAX_SYSTEM)) return json({ error: { message: 'リクエストが長すぎます' } }, 413);
@@ -103,6 +237,15 @@ async function ai(request, env) {
     maxTokens: Math.max(1, Math.min(MAX_TOKENS, Math.round(+b.maxTokens) || 2000)),
     search: !!b.search,
   };
+  // ゲストはサイト全体の1日の回数から1回分を確保（失敗したら返す）
+  let taken = null;
+  if (!user) {
+    taken = await usage(env, 'take').catch(() => ({ ok: false, error: 'counter' }));
+    if (!taken.ok) {
+      if (taken.error) return json({ error: { message: '利用回数を確認できませんでした。少し待ってからもう一度試してください', code: 'counter' } }, 503);
+      return json({ error: { message: `今日のゲスト利用回数（${taken.limit}回）を使い切りました。日本時間の0時にリセットされます。許可されたGoogleアカウントでログインすると無制限です`, code: 'guest_limit' } }, 429);
+    }
+  }
   // 1) 混雑系のエラーは少し待って再試行
   let used = provider, r = await withRetry(() => (provider === 'gemini' ? callGemini(o, env) : callClaude(o, env)));
   // 2) それでもダメなら、もう一方のAI（サーバにキーがあれば）に切り替える。AI_FALLBACK="off" で無効
@@ -113,10 +256,12 @@ async function ai(request, env) {
     if (!r2.error) { used = other; r = r2; o.model = o2.model; }
   }
   if (r.error) {
+    if (taken) await usage(env, 'refund').catch(() => {}); // 失敗した分は数えない
     if (BUSY.has(r.status)) r.error.message = 'AIが混み合っています。少し待ってからもう一度試してください';
     return json({ error: r.error }, r.status || 502);
   }
-  return json({ text: r.text, sources: [...r.sources], provider: used, model: o.model, fallback: used !== provider, stop: r.stop || '' });
+  const quota = user ? { unlimited: true } : { limit: taken.limit, used: taken.used, remaining: Math.max(0, taken.limit - taken.used) };
+  return json({ text: r.text, sources: [...r.sources], provider: used, model: o.model, fallback: used !== provider, stop: r.stop || '', quota });
 }
 
 // 混雑・一時的な障害（Anthropic の過負荷は 529）

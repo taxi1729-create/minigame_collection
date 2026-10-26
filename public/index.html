@@ -216,6 +216,9 @@ details.k-more summary{cursor:pointer;font-weight:900;font-size:13px;color:var(-
 .sheet .who{font-size:13px;font-weight:900;color:var(--k-ink2);margin:0 0 12px;line-height:1.5}
 footer.hub-foot{text-align:center;color:var(--k-ink2);font-size:12px;padding:0 16px 40px}
 /* ---- AI選択 ---- */
+.guest-left{margin:10px 0 0;font-weight:900;font-size:14px}
+.guest-left.is-out{color:var(--k-pink)}
+.gsi{min-height:44px}
 .ai-test{margin:8px 0 0;padding:8px 10px;border:2px solid var(--k-ink);border-radius:10px;background:var(--k-label2);font:700 13px/1.6 var(--k-body);white-space:pre-wrap;word-break:break-all}
 .ai-test.is-ok{border-color:var(--k-teal);background:color-mix(in srgb,var(--k-teal) 10%,var(--k-label))}
 .ai-test.is-ng{border-color:var(--k-pink);background:color-mix(in srgb,var(--k-pink) 8%,var(--k-label))}
@@ -244,7 +247,7 @@ footer.hub-foot{text-align:center;color:var(--k-ink2);font-size:12px;padding:0 1
       <p class="lid__sub">ふたを開けたら、すぐあそべる</p>
     </div>
   </div>
-  <button class="k-iconbtn k-sound" id="snd" type="button" data-se="none" aria-label="効果音のオンオフ"></button>
+  <button class="k-iconbtn k-sound" id="snd" type="button" data-se="none" aria-label="音（音楽・効果音）のオンオフ"></button>
 </header>
 
 <nav class="tabs" aria-label="メニュー">
@@ -300,9 +303,14 @@ footer.hub-foot{text-align:center;color:var(--k-ink2);font-size:12px;padding:0 1
           <input type="range" class="k-range" id="sVol" min="0" max="100" step="5">
           <output id="sVolOut" for="sVol">70</output>
         </div>
+        <label class="k-label" for="sBgm" style="margin-top:10px">音楽の音量</label>
+        <div class="vol">
+          <input type="range" class="k-range" id="sBgm" min="0" max="100" step="5">
+          <output id="sBgmOut" for="sBgm">45</output>
+        </div>
         <div class="k-row" style="margin-top:10px">
           <button class="k-btn k-btn--sm" id="sMute" type="button" data-se="none" aria-pressed="false"></button>
-          <span class="k-hint" style="margin:0">指を離すと試し聴きします</span>
+          <span class="k-hint" style="margin:0">ミュートは音楽と効果音の両方を止めます</span>
         </div>
       </div>
 
@@ -324,6 +332,17 @@ footer.hub-foot{text-align:center;color:var(--k-ink2);font-size:12px;padding:0 1
         <div class="ai-box ai-server" id="srvBox" hidden>
           <b class="ai-box__name">サーバのAI</b>
           <p class="k-hint" id="srvInfo" style="margin:2px 0 0"></p>
+          <div class="login" id="loginBox" hidden>
+            <div id="loginOut">
+              <p class="k-hint" style="margin:8px 0 6px">許可されたGoogleアカウントでログインすると、合言葉なし・回数無制限で遊べます。</p>
+              <div id="gsiBtn" class="gsi"></div>
+            </div>
+            <div id="loginIn" hidden>
+              <p class="ai-ok" id="loginWho"></p>
+              <button class="k-btn k-btn--ghost k-btn--sm" id="btnLogout" type="button">ログアウト</button>
+            </div>
+          </div>
+          <p class="guest-left" id="guestLeft" hidden></p>
           <div id="srvLocked">
             <label class="k-label" for="srvPass">合言葉</label>
             <div class="inline">
@@ -392,6 +411,7 @@ footer.hub-foot{text-align:center;color:var(--k-ink2);font-size:12px;padding:0 1
 
 <script src="kit/kit.js"></script>
 <script>
+Kit.music.bgm('home'); // ホーム画面の曲
 (() => {
 'use strict';
 const $ = id => document.getElementById(id);
@@ -831,13 +851,17 @@ $('sAdd').addEventListener('keydown', e => { if(e.key === 'Enter'){ e.preventDef
 document.querySelectorAll('.flist, #pnames').forEach(el => el.addEventListener('keydown', e => { if(e.key === 'Enter' && e.target.matches('input')) e.target.blur(); }));
 
 // サウンド
-const sVol = $('sVol');
+const sVol = $('sVol'), sBgm = $('sBgm');
 function drawSound(){
   const s = Kit.settings.get();
   const v = Math.round(s.volume * 100);
   if(document.activeElement !== sVol) sVol.value = v;
   sVol.style.setProperty('--p', `calc(15px + (100% - 30px) * ${sVol.value/100})`);
   $('sVolOut').textContent = sVol.value;
+  const bv = Math.round((s.bgmVolume == null ? .45 : s.bgmVolume) * 100);
+  if(document.activeElement !== sBgm) sBgm.value = bv;
+  sBgm.style.setProperty('--p', `calc(15px + (100% - 30px) * ${sBgm.value/100})`);
+  $('sBgmOut').textContent = sBgm.value;
   const m = $('sMute');
   m.setAttribute('aria-pressed', String(s.muted));
   m.innerHTML = (s.muted ? Kit.ICON.off : Kit.ICON.on) + `<span>${s.muted ? 'ミュート中' : '音あり'}</span>`;
@@ -849,9 +873,14 @@ sVol.addEventListener('change', () => {
   if(Kit.settings.get().muted && +sVol.value > 0) Kit.settings.set({muted:false});
   drawSound(); drawSnd(); Kit.SE.play('ok'); Kit.toast(`音量 ${sVol.value}`, 900);
 });
+sBgm.addEventListener('input', () => { Kit.settings.set({bgmVolume: sBgm.value/100}); drawSound(); });
+sBgm.addEventListener('change', () => {
+  if(Kit.settings.get().muted && +sBgm.value > 0){ Kit.settings.set({muted:false}); drawSnd(); }
+  drawSound(); Kit.toast(`音楽 ${sBgm.value}`, 900);
+});
 $('sMute').addEventListener('click', () => {
   Kit.SE.setMuted(!Kit.SE.muted); drawSound(); drawSnd(); Kit.SE.play('pop');
-  Kit.toast(Kit.SE.muted ? '効果音オフ' : '効果音オン', 900);
+  Kit.toast(Kit.SE.muted ? '音オフ' : '音オン', 900);
 });
 
 // AI：使用するAI・APIキー・モデル名
@@ -874,6 +903,17 @@ function drawAI(){
     $('srvLocked').hidden = ok || !sv.passcode; $('srvUnlocked').hidden = !ok;
     if(!sv.passcode) $('srvInfo').textContent += '（サーバの合言葉が未設定のため使えません）';
     box.classList.toggle('is-on', c.via === 'server');
+    // ログイン
+    const lg = sv.login || {}, user = sv.user;
+    $('loginBox').hidden = !lg.enabled;
+    $('loginIn').hidden = !user; $('loginOut').hidden = !!user;
+    if(user){ $('loginWho').textContent = `ログイン中：${user.email}（無制限）`; $('srvLocked').hidden = true; $('srvUnlocked').hidden = true; }
+    else if(lg.enabled) renderGsi(lg.clientId);
+    // ゲストの残り回数
+    const g = sv.guest;
+    $('guestLeft').hidden = !!user || !g || g.limit == null;
+    if(g && !user) $('guestLeft').textContent = `今日のゲスト利用（サイト全体）：のこり ${g.remaining} / ${g.limit} 回`;
+    $('guestLeft').classList.toggle('is-out', !!(g && g.remaining <= 0));
   }
 }
 $('srvUnlock').addEventListener('click', async () => {
@@ -900,6 +940,33 @@ $('aiTest').addEventListener('click', async () => {
     out.textContent = `失敗：${(e && e.message) || e}\n詳細：${(e && e.detail) || '-'}${e && e.status ? `（HTTP ${e.status}）` : ''}\n使用：${c.label}（${c.model}）・${c.via === 'own' ? 'あなたのキー' : c.via === 'server' ? 'サーバのキー' : 'キーなし'}`;
     Kit.SE.play('ng');
   }finally{ b.disabled = false; }
+});
+// Googleログイン（Google Identity Services）。必要になったときだけ読み込む
+let gsiState = '';
+function renderGsi(clientId){
+  if(!clientId || gsiState === clientId) return;
+  const draw = () => {
+    if(!window.google || !google.accounts || !google.accounts.id) return;
+    google.accounts.id.initialize({ client_id: clientId, callback: async r => {
+      const res = await Kit.ai.login(r.credential);
+      if(res.ok){ Kit.SE.play('ok'); Kit.toast(`ログインしました（${res.email}）`, 2000); }
+      else { Kit.SE.play('ng'); Kit.toast(res.error, 3200); }
+      drawAI();
+    }});
+    $('gsiBtn').innerHTML = '';
+    google.accounts.id.renderButton($('gsiBtn'), { theme: 'outline', size: 'large', shape: 'pill', text: 'signin_with', locale: 'ja' });
+    gsiState = clientId;
+  };
+  if(window.google && google.accounts) return draw();
+  if(!document.getElementById('gsiScript')){
+    const sc = document.createElement('script');
+    sc.id = 'gsiScript'; sc.src = 'https://accounts.google.com/gsi/client'; sc.async = true; sc.onload = draw;
+    document.head.appendChild(sc);
+  }
+}
+$('btnLogout').addEventListener('click', async () => {
+  try{ if(window.google && google.accounts) google.accounts.id.disableAutoSelect(); }catch(e){}
+  await Kit.ai.logout(); gsiState = ''; drawAI(); Kit.toast('ログアウトしました');
 });
 $('srvLock').addEventListener('click', () => { Kit.ai.lock(); drawAI(); Kit.toast('合言葉を消しました'); });
 Kit.onChange(r => { if(r === 'settings') drawAI(); });
@@ -1069,7 +1136,7 @@ document.addEventListener('keydown', e => { if(e.key === 'Escape' && !sheet.hidd
    ========================================================= */
 const snd = $('snd');
 function drawSnd(){ snd.innerHTML = Kit.SE.muted ? Kit.ICON.off : Kit.ICON.on; snd.setAttribute('aria-pressed', String(!Kit.SE.muted)); }
-snd.addEventListener('click', () => { Kit.SE.setMuted(!Kit.SE.muted); drawSnd(); drawSound(); Kit.SE.play('pop'); Kit.toast(Kit.SE.muted ? '効果音オフ' : '効果音オン', 900); });
+snd.addEventListener('click', () => { Kit.SE.setMuted(!Kit.SE.muted); drawSnd(); drawSound(); Kit.SE.play('pop'); Kit.toast(Kit.SE.muted ? '音オフ' : '音オン', 900); });
 
 function renderAll(){
   // 名前などを入力中は描き直さない（入力が消えるのを防ぐ）

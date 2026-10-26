@@ -4,6 +4,8 @@
    ========================================================= */
 (function(){
 'use strict';
+// kit.js 自身の場所（音楽ファイルの場所をここから決める）
+const KIT_SRC = (document.currentScript && document.currentScript.src) || (typeof location !== 'undefined' ? location.href : '');
 const NS = 'asobibako';
 
 /* ---------- storage（端末内のキー値。APIキーなど同期しないもの） ---------- */
@@ -57,7 +59,7 @@ function onChange(fn){ listeners.add(fn); return () => listeners.delete(fn); }
 
 /* ---------- 設定（端末ごと。同期しない） ---------- */
 const URL_PLAYERS = (() => { try{ const n = parseInt(new URLSearchParams(location.search).get('players'), 10); return n >= 1 && n <= 8 ? n : 0; }catch(e){ return 0; } })();
-const SETTINGS_DEFAULT = { volume: 0.7, muted: false, partySize: 3, aiProvider: '', keys: { claude:'', gemini:'' }, models: { claude:'claude-sonnet-5-5', gemini:'gemini-3.5-flash-lite' } };
+const SETTINGS_DEFAULT = { volume: 0.7, bgmVolume: 0.45, muted: false, partySize: 3, aiProvider: '', keys: { claude:'', gemini:'' }, models: { claude:'claude-sonnet-5-5', gemini:'gemini-3.5-flash-lite' } };
 const settings = {
   get(){
     const s = store.get('settings', {});
@@ -81,6 +83,7 @@ const settings = {
     if(patch.models) next.models = Object.assign({}, prevModels, patch.models);
     store.set('settings', next);
     if('volume' in patch || 'muted' in patch) SE._apply();
+    if(('bgmVolume' in patch || 'muted' in patch) && typeof Music !== 'undefined') Music._apply();
     listeners.forEach(fn => { try{ fn('settings'); }catch(e){} });
     return next;
   },
@@ -204,10 +207,104 @@ const SE = (() => {
   return {
     play(name){ try{ if(!vol()) return; (lib[name]||lib.click)(); }catch(e){} },
     unlock(){ ensure(); },
+    _ctx(){ return ensure(); },
     get muted(){ return muted; },
     setMuted(v){ settings.set({ muted: !!v }); },
     _apply(){ muted = !!settings.get().muted; if(master) master.gain.value = vol(); },
   };
+})();
+
+/* =========================================================
+   音楽（BGM・ジングル）
+   - ホーム：Sunday Morning Quest（home）
+   - ミニゲーム中：High Score Velocity（play）
+   - 成功ジングル：Crown of Coins（win） / 失敗ジングル：Coffee and High Scores（lose）
+   曲が切り替わるときは、いつも頭から再生する
+   ========================================================= */
+const Music = (() => {
+  const base = (() => { try{ return new URL('../audio/', KIT_SRC).href; }catch(e){ return '../audio/'; } })();
+  const FILES = { home: 'home.mp3', play: 'play.mp3', win: 'win.mp3', lose: 'lose.mp3' };
+  const JINGLE_MS = 10500; // ジングルはここまで流したら元のBGMへ
+  let bgmEl = null, jEl = null, gain = null, jGain = null;
+  let want = '', jingling = false, jTimer = 0, unlocked = false;
+  const level = () => { const s = settings.get(); return s.muted ? 0 : Math.max(0, Math.min(1, s.bgmVolume == null ? 0.45 : s.bgmVolume)); };
+  function make(){
+    if(bgmEl) return;
+    bgmEl = new Audio(); bgmEl.loop = true; bgmEl.preload = 'auto';
+    jEl = new Audio(); jEl.loop = false; jEl.preload = 'auto';
+    jEl.addEventListener('ended', endJingle);
+    [bgmEl, jEl].forEach(a => { a.setAttribute('playsinline', ''); a.crossOrigin = 'anonymous'; });
+  }
+  // iOS では audio.volume が効かないので、Web Audio のゲインで音量を付ける
+  function route(){
+    if(gain || !bgmEl) return;
+    try{
+      const ctx = SE._ctx(); if(!ctx) return;
+      gain = ctx.createGain(); jGain = ctx.createGain();
+      ctx.createMediaElementSource(bgmEl).connect(gain).connect(ctx.destination);
+      ctx.createMediaElementSource(jEl).connect(jGain).connect(ctx.destination);
+    }catch(e){ gain = jGain = null; }
+    apply();
+  }
+  function apply(){
+    const v = level();
+    if(gain){ gain.gain.value = v; jGain.gain.value = Math.min(1, v * 1.15); bgmEl.volume = 1; jEl.volume = 1; }
+    else if(bgmEl){ bgmEl.volume = v; jEl.volume = Math.min(1, v * 1.15); }
+    if(!bgmEl) return;
+    if(v === 0){ bgmEl.pause(); jEl.pause(); }
+    else if(unlocked && want && !jingling && bgmEl.paused && document.visibilityState !== 'hidden') safePlay(bgmEl);
+  }
+  function safePlay(a){
+    const p = a.play();
+    if(p && p.catch) p.catch(() => {}); // 自動再生が止められたら、最初のタップで再生
+  }
+  function startBgm(fromTop){
+    if(!want || !level()) return;
+    make();
+    const src = base + FILES[want];
+    if(bgmEl.dataset.track !== want){ bgmEl.src = src; bgmEl.dataset.track = want; }
+    if(fromTop) try{ bgmEl.currentTime = 0; }catch(e){}
+    if(unlocked || navigator.userActivation?.hasBeenActive) safePlay(bgmEl);
+  }
+  // BGM を指定（同じ曲なら何もしない。別の曲なら頭から）
+  function bgm(name){
+    if(!FILES[name] || name === 'win' || name === 'lose') return;
+    const changed = name !== want;
+    want = name;
+    if(jingling) return; // ジングルが終わったら頭から流れる
+    if(changed) startBgm(true);
+  }
+  function jingle(name){
+    if(name !== 'win' && name !== 'lose') return;
+    make();
+    if(!level()) return;
+    jingling = true;
+    bgmEl.pause();
+    jEl.src = base + FILES[name];
+    try{ jEl.currentTime = 0; }catch(e){}
+    safePlay(jEl);
+    clearTimeout(jTimer); jTimer = setTimeout(endJingle, JINGLE_MS);
+  }
+  function endJingle(){
+    if(!jingling) return;
+    clearTimeout(jTimer); jingling = false;
+    try{ jEl.pause(); }catch(e){}
+    startBgm(true); // 曲が変わるので頭から
+  }
+  function unlock(){
+    unlocked = true; make(); route();
+    if(want && !jingling && bgmEl.paused) startBgm(!bgmEl.currentTime);
+  }
+  if(typeof document !== 'undefined'){
+    ['pointerdown', 'keydown', 'touchend'].forEach(t => document.addEventListener(t, unlock, { once: true, capture: true }));
+    document.addEventListener('visibilitychange', () => {
+      if(!bgmEl) return;
+      if(document.visibilityState === 'hidden'){ bgmEl.pause(); jEl.pause(); }
+      else if(want && !jingling && unlocked && level()) safePlay(bgmEl);
+    });
+  }
+  return { bgm, jingle, stopJingle: endJingle, _apply: apply, get track(){ return want; },
+    _state(){ return { want, jingling, unlocked, src: bgmEl && bgmEl.dataset.track, paused: bgmEl ? bgmEl.paused : true, t: bgmEl ? bgmEl.currentTime : 0, jsrc: jEl && jEl.src, jpaused: jEl ? jEl.paused : true }; } };
 })();
 
 /* ---------- 途中セーブ / 自己ベスト ---------- */
@@ -335,8 +432,11 @@ const ai = (() => {
     }
     const sv = server();
     if(sv && sv.server && sv.server[provider]){
+      const model = (sv.models || {})[provider] || AI_DEFAULT_MODELS[provider];
+      if(sv.user) return { provider, key: '', model, label, ready: true, via: 'server', user: sv.user.email, unlimited: true };
       const ok = unlocked();
-      return { provider, key: '', model: (sv.models || {})[provider] || AI_DEFAULT_MODELS[provider], label, ready: ok, via: 'server', needPasscode: !ok };
+      const g = sv.guest || null, out = g && g.limit != null && g.remaining <= 0;
+      return { provider, key: '', model, label, ready: ok && !out, via: 'server', needPasscode: !ok, guestOut: !!out, guest: g };
     }
     const model = ((s.models || {})[provider] || '').trim() || AI_DEFAULT_MODELS[provider];
     return { provider, key: '', model, label, ready: false, via: 'none' };
@@ -344,7 +444,7 @@ const ai = (() => {
   async function refreshServer(){
     try{
       const ctl = new AbortController(); const t = setTimeout(() => ctl.abort(), 5000);
-      const res = await fetch(API('config'), { signal: ctl.signal, cache: 'no-store' }).finally(() => clearTimeout(t));
+      const res = await fetch(API('config'), { signal: ctl.signal, cache: 'no-store', credentials: 'same-origin' }).finally(() => clearTimeout(t));
       const ct = res.headers.get('content-type') || '';
       if(!res.ok || !ct.includes('json')){ store.del('serverAI'); return null; } // Worker の無い環境（ローカルや他のホスティング）
       const cfg = await res.json();
@@ -369,11 +469,34 @@ const ai = (() => {
     }
     return { ok: false, error: (data && data.error && data.error.message) || '合言葉を確認できませんでした' };
   }
+  // ゲストの残り回数を更新（サーバの返事から）
+  function setGuest(q){
+    const sv = server(); if(!sv) return;
+    sv.guest = Object.assign({}, sv.guest || {}, q);
+    if(sv.guest.limit != null && sv.guest.used != null && q.remaining == null) sv.guest.remaining = Math.max(0, sv.guest.limit - sv.guest.used);
+    store.set('serverAI', sv);
+    listeners.forEach(fn => { try{ fn('settings'); }catch(e){} });
+  }
+  // Googleログイン（GIS の credential をサーバに渡す）
+  async function login(credential){
+    let res, data;
+    try{
+      res = await fetch(API('login'), { method: 'POST', credentials: 'same-origin', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ credential }) });
+      data = await res.json().catch(() => null);
+    }catch(e){ return { ok: false, error: 'サーバにつながりませんでした' }; }
+    await refreshServer();
+    if(res.ok && data && data.ok) return { ok: true, email: data.email };
+    return { ok: false, error: (data && data.error && data.error.message) || 'ログインできませんでした' };
+  }
+  async function logout(){
+    try{ await fetch(API('logout'), { method: 'POST', credentials: 'same-origin' }); }catch(e){}
+    await refreshServer();
+  }
   function lock(){ store.del('passcode'); store.del('passcodeOk'); listeners.forEach(fn => { try{ fn('settings'); }catch(e){} }); }
   async function viaServer(c, o){
     let res, data;
     try{
-      res = await fetch(API('ai'), { method: 'POST', signal: o.signal,
+      res = await fetch(API('ai'), { method: 'POST', signal: o.signal, credentials: 'same-origin',
         headers: { 'content-type': 'application/json', 'x-game-passcode': store.get('passcode', '') },
         body: JSON.stringify({ provider: c.provider, system: o.system || '', prompt: o.prompt, maxTokens: o.maxTokens || 2000, search: !!o.search }) });
       data = await res.json().catch(() => null);
@@ -384,9 +507,11 @@ const ai = (() => {
     if(!res.ok){
       const err = (data && data.error) || {};
       if(err.code === 'bad_passcode'){ lock(); throw new AIError('合言葉が違うか、変わりました。タイトルの「設定変更」で合言葉を入れ直してください', 'bad_passcode', 401); }
+      if(err.code === 'guest_limit'){ setGuest({ remaining: 0 }); throw new AIError(err.message, 'guest_limit', 429); }
       if(err.upstream) throw httpErr(err.upstream, err.detail);
       throw new AIError(err.message || 'AIでエラーが起きました', err.detail || `HTTP ${res.status}`, res.status);
     }
+    if(data && data.quota && !data.quota.unlimited) setGuest(data.quota);
     if(o.json && data && data.stop === 'max_tokens') throw new AIError('AIの返答が長すぎて途中で切れました。もう一度試してください', 'max_tokens');
     return { text: (data && data.text) || '', sources: new Set((data && data.sources) || []), provider: data && data.provider, model: data && data.model, fallback: !!(data && data.fallback) };
   }
@@ -488,7 +613,8 @@ const ai = (() => {
 
   async function ask(o = {}){
     const c = current();
-    if(c.via === 'server' && c.needPasscode) throw new AIError('AIを使うには合言葉が必要です。タイトルの「設定変更」で合言葉を入れてください', 'need passcode');
+    if(c.via === 'server' && c.needPasscode) throw new AIError('AIを使うには合言葉が必要です（ログインすると不要）。タイトルの「設定変更」で入れてください', 'need passcode');
+    if(c.via === 'server' && c.guestOut) throw new AIError(`今日のゲスト利用回数（${c.guest.limit}回）を使い切りました。日本時間の0時にリセットされます。許可されたGoogleアカウントでログインすると無制限です`, 'guest_limit', 429);
     if(!c.ready) throw new AIError(`使用するAI（${c.label}）のAPIキーが未設定です。タイトルの「設定変更」で入れてください`, 'no key');
     const r = c.via === 'server' ? await viaServer(c, o) : c.provider === 'gemini' ? await gemini(c, o) : await claude(c, o);
     if(!r.text) throw new AIError('AIが返答しませんでした。もう一度試してください', 'empty text');
@@ -502,10 +628,11 @@ const ai = (() => {
   function reason(){
     const c = current();
     if(c.ready) return '';
-    if(c.via === 'server') return '合言葉が未入力です。タイトルの「設定変更」で合言葉を入れるとAIが使えます';
+    if(c.via === 'server' && c.guestOut) return `今日のゲスト利用回数（${c.guest.limit}回）を使い切りました。ログインすると無制限です`;
+    if(c.via === 'server') return '合言葉が未入力です。タイトルの「設定変更」で合言葉を入れるか、ログインするとAIが使えます';
     return `${c.label}のAPIキーが未設定です。タイトルの「設定変更」で入れるとAIが使えます`;
   }
-  return { ask, current, reason, parseJson, refreshServer, unlock, lock, server, Error: AIError, DEFAULT_MODELS: AI_DEFAULT_MODELS, LABEL: AI_LABEL };
+  return { ask, current, reason, parseJson, refreshServer, unlock, lock, login, logout, server, Error: AIError, DEFAULT_MODELS: AI_DEFAULT_MODELS, LABEL: AI_LABEL };
 })();
 // ページを開くたびにサーバのAI設定を確認（Worker が無ければ何もしない）
 if(typeof location !== 'undefined' && /^https?:$/.test(location.protocol)) setTimeout(() => ai.refreshServer(), 0);
@@ -582,8 +709,8 @@ function showFx({title, sub='', fail=false, ms=2400}={}){
     fx.querySelector('small').textContent = sub;
     if(!sub) fx.querySelector('small').remove();
     document.body.appendChild(fx);
-    if(fail){ SE.play('fail'); }
-    else { SE.play('stamp'); setTimeout(()=>SE.play('fanfare'), 120); confetti(fx.querySelector('canvas'), ms); }
+    if(fail){ SE.play('fail'); Music.jingle('lose'); }
+    else { SE.play('stamp'); setTimeout(()=>SE.play('fanfare'), 120); confetti(fx.querySelector('canvas'), ms); Music.jingle('win'); }
     if(navigator.vibrate) navigator.vibrate(fail ? [200] : [40,40,80]);
     const done = () => { fx.classList.add('out'); setTimeout(()=>{ fx.remove(); res(); }, 350); };
     const t = setTimeout(done, ms);
@@ -612,17 +739,18 @@ const ICON = {
 let current = null;
 function mount({id, title, onSave, home='../../index.html'}){
   current = {id, onSave, home};
+  Music.bgm('play'); // ミニゲーム中の曲
   const bar = document.createElement('header');
   bar.className = 'k-bar';
   bar.innerHTML = `
     <button class="k-iconbtn k-home" type="button" data-se="none" aria-label="セーブしてホームに戻る">${ICON.home}<span>ホーム</span></button>
     <div class="k-bar__title"></div>
-    <button class="k-iconbtn k-sound" type="button" data-se="none" aria-label="効果音のオンオフ"></button>`;
+    <button class="k-iconbtn k-sound" type="button" data-se="none" aria-label="音（音楽・効果音）のオンオフ"></button>`;
   bar.querySelector('.k-bar__title').textContent = title;
   const snd = bar.querySelector('.k-sound');
   const drawSnd = () => { snd.innerHTML = SE.muted ? ICON.off : ICON.on; snd.setAttribute('aria-pressed', String(!SE.muted)); };
   drawSnd();
-  snd.addEventListener('click', () => { SE.setMuted(!SE.muted); drawSnd(); SE.play('pop'); toast(SE.muted ? '効果音オフ' : '効果音オン', 900); });
+  snd.addEventListener('click', () => { SE.setMuted(!SE.muted); drawSnd(); SE.play('pop'); toast(SE.muted ? '音オフ' : '音オン', 900); });
   onChange(r => { if(r === 'settings') drawSnd(); });
   bar.querySelector('.k-home').addEventListener('click', goHome);
   document.body.prepend(bar);
@@ -665,5 +793,5 @@ document.addEventListener('pointerdown', () => SE.unlock(), {once:true});
 window.Kit = { SE, store, save, load, saveInfo, clearSave, best, toast, confirm: confirmBox,
   celebrate, fail, shake, screen, mount, goHome, persist, ICON,
   settings, profile, players, mainName, record, records, deleteRecords, newGroup,
-  cloud: Cloud, onChange, ai, exportData, importData, _mergeDocs: mergeDocs };
+  cloud: Cloud, onChange, ai, music: Music, exportData, importData, _mergeDocs: mergeDocs };
 })();
