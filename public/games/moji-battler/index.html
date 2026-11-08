@@ -99,6 +99,36 @@
 /* ---- 結果 ---- */
 .win-name{font-family:var(--k-display);font-size:clamp(34px,11vw,52px);line-height:1.15;color:var(--fc);text-shadow:3px 3px 0 var(--k-ink);overflow-wrap:anywhere}
 .fin{font-weight:900;margin:6px 0 0}
+
+/* ---- 保存キャラ ---- */
+.roster{display:grid;gap:8px;margin-top:8px}
+.ro{display:grid;grid-template-columns:1fr auto;gap:6px;align-items:stretch}
+.ro-pick{all:unset;box-sizing:border-box;cursor:pointer;display:grid;grid-template-columns:minmax(0,1fr) auto;gap:0 8px;align-items:center;background:var(--k-label);border:3px solid var(--k-ink);border-radius:12px;padding:6px 10px;box-shadow:3px 3px 0 var(--fc,var(--k-teal));min-width:0}
+.ro-pick:active{transform:translate(2px,2px);box-shadow:1px 1px 0 var(--fc,var(--k-teal))}
+.ro-pick:focus-visible{outline:3px solid var(--k-pink);outline-offset:2px}
+.ro-pick b{font-family:var(--k-display);font-weight:400;font-size:18px;line-height:1.25;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ro-pick .t{grid-column:1;font-size:12px;font-weight:900;color:var(--k-ink2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ro-pick .s{grid-row:1/3;grid-column:2;font-size:11px;font-weight:900;color:var(--k-ink2);text-align:right;line-height:1.35;font-variant-numeric:tabular-nums}
+.ro-del{min-width:44px;border:3px solid var(--k-ink);border-radius:12px;background:var(--k-label2);font-weight:900;font-size:13px;cursor:pointer;color:var(--k-ink)}
+.ro-del.arm{background:var(--k-pink);color:#fff}
+.ro-empty{font-size:13px;color:var(--k-ink2);margin:8px 0 0}
+.cc-act{margin-top:10px;display:flex;justify-content:flex-end}
+
+/* ---- 必殺技カットイン ---- */
+.cutin{position:fixed;inset:0;z-index:60;display:grid;place-items:center;pointer-events:none;overflow:hidden}
+.cutin::before{content:"";position:absolute;inset:0;background:rgba(24,18,36,.55);animation:ciFade 1.5s both}
+.cutin .band{position:relative;width:150%;background:var(--fc);border-block:6px solid var(--k-ink);padding:14px 0 16px;text-align:center;box-shadow:0 10px 0 var(--k-ink);animation:ciBand 1.5s cubic-bezier(.2,1,.3,1) both;overflow:hidden}
+.cutin .band::after{content:"";position:absolute;inset:0;background:repeating-linear-gradient(100deg,transparent 0 26px,rgba(255,255,255,.22) 26px 30px);animation:ciLines .35s linear infinite;pointer-events:none}
+.cutin .lbl{position:relative;z-index:1;display:inline-block;background:#fff;color:var(--k-ink);border:3px solid var(--k-ink);border-radius:8px;font-weight:900;font-size:13px;padding:0 10px;transform:rotate(-3deg)}
+.cutin .who{position:relative;z-index:1;display:block;font-weight:900;color:#fff;font-size:16px;margin-top:6px;text-shadow:2px 2px 0 var(--k-ink)}
+.cutin .spn{position:relative;z-index:1;display:block;font-family:var(--k-display);font-size:clamp(30px,10vw,52px);line-height:1.15;color:#fff;text-shadow:4px 4px 0 var(--k-ink);padding:0 22%;overflow-wrap:anywhere;animation:ciText 1.5s cubic-bezier(.2,1.6,.4,1) both}
+.cutin .flash{position:absolute;inset:0;background:#fff;animation:ciFlash 1.5s both}
+@keyframes ciFade{0%,100%{opacity:0}12%,85%{opacity:1}}
+@keyframes ciBand{0%{transform:translateX(-110%) rotate(-8deg)}16%,84%{transform:translateX(0) rotate(-8deg)}100%{transform:translateX(110%) rotate(-8deg)}}
+@keyframes ciText{0%,14%{transform:scale(2.2);opacity:0}30%{transform:scale(1);opacity:1}84%{transform:scale(1.04);opacity:1}100%{opacity:0}}
+@keyframes ciFlash{0%{opacity:.9}10%{opacity:0}100%{opacity:0}}
+@keyframes ciLines{to{background-position:30px 0}}
+@media (prefers-reduced-motion:reduce){.cutin .band,.cutin .spn,.cutin .band::after{animation-duration:.01s}.cutin .band{transform:rotate(-8deg)}}
 </style>
 </head>
 <body class="kit">
@@ -132,10 +162,11 @@
     <div class="k-panel">
       <span class="k-tag">あそびかた</span>
       <ol style="margin:8px 0 0;padding-left:20px;font-size:14px">
-        <li>1人ずつ「キャラ名・見た目・性格・武器・能力」を各6文字まで入力</li>
+        <li>1人ずつ「キャラ名・見た目・性格・武器・能力」を各10文字まで入力（保存したキャラから選んでもOK）</li>
         <li>入力が終わったら、AIがキャラを作っている間に次の人が入力</li>
-        <li>全員そろったら入場 → 対峙 → 実況つきバトル</li>
-        <li>最後まで立っていたキャラの勝ち（1人のときは敵キャラと対決）</li>
+        <li>全員そろったら入場 → 対峙 → 実況つきバトル。必殺技はカットインで登場</li>
+        <li>最後まで立っていたキャラの勝ち（1人のときは敵キャラか保存キャラと対決）</li>
+        <li>気に入ったキャラは入場・結果の画面で「保存」できます</li>
       </ol>
     </div>
     <button class="k-btn k-btn--primary k-btn--big k-btn--block" id="btnStart" data-se="start">キャラを作る</button>
@@ -150,10 +181,26 @@
     </div>
     <button class="k-btn k-btn--primary k-btn--big k-btn--block" id="btnSubmit" type="submit" form="entryForm" data-se="ok">このキャラで決定</button>
     <button class="k-btn k-btn--ghost k-btn--block k-btn--sm" id="btnRandom" type="button" data-se="pop">おまかせで埋める</button>
+    <div class="k-panel" id="rosterPanel" hidden>
+      <span class="k-tag">保存キャラから選ぶ</span>
+      <p class="k-hint" style="margin:6px 0 0">選ぶとそのキャラで決定します（AIで作り直しません）</p>
+      <div class="roster" id="rosterList"></div>
+    </div>
     <div class="k-panel" id="genPanel" hidden>
       <span class="k-tag">キャラ生成</span>
       <ul class="gen-list" id="genList" style="margin-top:8px"></ul>
     </div>
+  </section>
+
+  <!-- 対戦相手（1人のとき） -->
+  <section class="k-screen k-stack" id="sFoe">
+    <div class="k-panel k-panel--tape k-center">
+      <h2 class="k-h2" style="margin-top:6px">対戦相手を選ぶ</h2>
+      <p class="k-hint" id="foeHint" style="margin:6px 0 0"></p>
+    </div>
+    <button class="k-btn k-btn--primary k-btn--big k-btn--block" id="btnFoeRandom" data-se="none">おまかせ（ランダム）</button>
+    <div class="k-panel"><span class="k-tag">敵キャラ</span><div class="roster" id="foeEnemies"></div></div>
+    <div class="k-panel"><span class="k-tag">保存キャラ</span><div class="roster" id="foeSaved"></div></div>
   </section>
 
   <!-- 生成待ち -->
@@ -224,7 +271,8 @@
 (() => {
 'use strict';
 const ID = 'moji-battler';
-const MAXLEN = 6;
+const MAXLEN = 10;
+const ROSTER_KEY = ID + '.roster', ROSTER_MAX = 60;
 const FIELDS = [
   { k:'name', label:'キャラ名', ph:'例）鉄拳タロウ' },
   { k:'look', label:'見た目', ph:'例）金色の鎧' },
@@ -251,6 +299,26 @@ const len = s => [...String(s || '')].length;
 const cut = (s, n) => [...String(s == null ? '' : s).replace(/\s+/g, ' ').trim()].slice(0, n).join('');
 const pick = a => a[Math.floor(Math.random() * a.length)];
 const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+/* ---------- 保存キャラ（端末に保存） ---------- */
+const CHAR_KEYS = ['name','title','input','look','personality','weapon','ability','special','stats','quote','intro','local'];
+const cleanChar = c => { const o = {}; CHAR_KEYS.forEach(k => { if(c[k] !== undefined) o[k] = JSON.parse(JSON.stringify(c[k])); }); return o; };
+const charSig = c => `${c.name}|${c.title}|${c.special && c.special.name}`;
+function getRoster(){ const r = Kit.store.get(ROSTER_KEY, []); return Array.isArray(r) ? r.filter(c => c && c.name && c.stats && c.special) : []; }
+function isSaved(c){ const s = charSig(c); return getRoster().some(x => charSig(x) === s); }
+function saveChar(c){
+  const r = getRoster(), s = charSig(c);
+  const rest = r.filter(x => charSig(x) !== s);
+  rest.unshift({ id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6), savedAt: Date.now(), ...cleanChar(c) });
+  return Kit.store.set(ROSTER_KEY, rest.slice(0, ROSTER_MAX));
+}
+function removeSaved(id){ Kit.store.set(ROSTER_KEY, getRoster().filter(x => x.id !== id)); }
+function rosterItem(c, attr, fc, del){
+  const s = c.stats;
+  return `<div class="ro"${fc != null ? ` style="--fc:var(--f${fc})"` : ''}>
+    <button type="button" class="ro-pick" ${attr}><b>${esc(c.name)}</b><span class="t">${esc(c.title)}・必殺「${esc(c.special.name)}」</span><span class="s">HP${s.hp}<br>攻${s.atk} 防${s.def} 速${s.spd}</span></button>
+    ${del ? `<button type="button" class="ro-del" data-del="${esc(c.id)}" aria-label="${esc(c.name)}を削除">削除</button>` : ''}</div>`;
+}
 
 /* =========================================================
    状態
@@ -365,13 +433,15 @@ ${roster}
 - events は ${L.events[0]}〜${L.events[1]} 個。1つの text は60文字以内。
 - speaker は "実況" か "解説"。実況が中心で、解説はときどき（全体の2〜3割）。
 - 各キャラの見た目・性格・武器・能力・必殺技を活かした展開にする。ステータスも参考にするが、意外な逆転があってもよい。
-- 攻撃でHPが減ったイベントには hp を入れる。hp は { "キャラ番号": 残りHP } の形で、そのイベントで変わったキャラだけ。HPは0未満にしない。
-- 倒れたキャラはHPを0にし、その後は攻撃しない。最後に生き残るのは1体だけ（winner）。winner の最終HPは1以上。
+- HPは実況に合わせて少しずつ減らす。攻撃が当たったイベントには必ず hp を入れる（{ "キャラ番号": そのイベント後の残りHP }、変わったキャラだけ）。
+- 1回の攻撃で減るのは最大HPの10〜35%が目安。必殺技は35〜60%。一撃で倒さず、各キャラが3回以上に分けて削られるようにする。
+- 必殺技を出したイベントには "special": 技を出したキャラ番号 を入れ、text に技名を「」で書く。必殺技は各キャラ1回まで。
+- HPは0未満にしない。倒れたキャラはHPを0にし、その後は攻撃しない。最後に生き残るのは1体だけ（winner）。winner の最終HPは1以上。
 - 最後のイベントは決着の瞬間（勝者の決めゼリフを入れてもよい）。
 - finish は決まり手（15文字以内）。
 
-出力形式（このJSONのみ）:
-{"events":[{"speaker":"実況","text":"","hp":{"0":90}}],"winner":0,"finish":""}`;
+出力形式（このJSONのみ。hp・special は必要なイベントだけ）:
+{"events":[{"speaker":"実況","text":"","hp":{"1":82}},{"speaker":"実況","text":"必殺「技名」！","hp":{"0":40},"special":1}],"winner":0,"finish":""}`;
 }
 function normalizeBattle(j){
   const n = S.chars.length;
@@ -382,9 +452,21 @@ function normalizeBattle(j){
     if(!e || !e.text) return;
     const ev = { speaker: e.speaker === '解説' ? '解説' : '実況', text: cut(e.text, 90), hp: {} };
     if(e.hp && typeof e.hp === 'object') Object.entries(e.hp).forEach(([k, v]) => {
-      const i = +k; if(Number.isInteger(i) && i >= 0 && i < n){ hp[i] = clampN(v, 0, max[i], hp[i]); ev.hp[i] = hp[i]; }
+      // HPは増やさない（回復の演出はしない）
+      const i = +k; if(Number.isInteger(i) && i >= 0 && i < n){ hp[i] = Math.min(hp[i], clampN(v, 0, max[i], hp[i])); ev.hp[i] = hp[i]; }
     });
+    const sp = Number.isInteger(+e.special) && e.special !== null && e.special !== '' ? +e.special : -1;
+    if(sp >= 0 && sp < n) ev.special = sp;
     events.push(ev);
+  });
+  // 技名が実況に出てきたらカットイン（1キャラ1回まで）
+  const spUsed = new Set();
+  events.forEach(ev => {
+    if(ev.special == null && ev.speaker === '実況'){
+      const i = S.chars.findIndex((c, k) => !spUsed.has(k) && c.special && len(c.special.name) >= 2 && ev.text.includes(c.special.name));
+      if(i >= 0) ev.special = i;
+    }
+    if(ev.special != null){ if(spUsed.has(ev.special)) delete ev.special; else spUsed.add(ev.special); }
   });
   if(events.length < 3) throw new Kit.ai.Error('実況がうまく作れませんでした。もう一度試してください', 'events too few');
   let winner = clampN(j.winner, 0, n - 1, -1);
@@ -396,7 +478,33 @@ function normalizeBattle(j){
     if(i !== winner && h > 0){ hp[i] = 0; last.hp[i] = 0; }
   });
   if(hp[winner] <= 0){ hp[winner] = 1; last.hp[winner] = 1; }
+  smoothHp(events, max);
   return { events, winner, finish: cut(j.finish, 18) || '' , finalHp: hp };
+}
+// HPの記録が飛び飛びのとき、その間でキャラ名が出てくる行にも少しずつ減りを割り振る
+function smoothHp(events, max){
+  S.chars.forEach((c, i) => {
+    let prevIdx = -1, prevHp = max[i];
+    events.forEach((ev, q) => {
+      if(ev.hp[i] == null) return;
+      const target = ev.hp[i], drop = prevHp - target;
+      if(drop > max[i] * 0.2){
+        const mid = [];
+        for(let k = prevIdx + 1; k < q; k++){
+          const e = events[k];
+          if(e.speaker !== '実況' || e.hp[i] != null || e.special === i) continue;
+          const at = e.text.indexOf(c.name); if(at < 0) continue;
+          // 他のキャラより先に名前が出る行は、たいてい攻める側なので外す
+          const other = S.chars.some((d, x) => x !== i && (() => { const p = e.text.indexOf(d.name); return p >= 0 && p > at; })());
+          if(!other) mid.push(k);
+        }
+        // 大きな一撃そのものは残す：割り振るのは減り幅の半分まで
+        const share = drop * 0.5, m = mid.length;
+        mid.forEach((k, j) => { events[k].hp[i] = Math.round(prevHp - share * (j + 1) / m); });
+      }
+      prevIdx = q; prevHp = target;
+    });
+  });
 }
 // AIなしの簡易バトル
 function localBattle(){
@@ -446,7 +554,7 @@ function drawSetup(){
   $('members').innerHTML = S.players.map((p, i) => `<span class="k-chip fc${i}" style="border-color:var(--k-ink);box-shadow:inset 0 -4px 0 var(--fc)">${esc(p)}</span>`).join('')
     + `<span class="k-chip k-chip--teal">${S.players.length}人</span>`;
   $('memberNote').textContent = (raw > 4 ? `このゲームは1〜4人です。${S.players.length}人で遊びます。` : '')
-    + (S.players.length === 1 ? '1人のときは、用意された敵キャラと戦います。' : '') + '人数と名前はタイトルの「みんなで遊ぶ」で変えられます。';
+    + (S.players.length === 1 ? '1人のときは、敵キャラか保存キャラから相手を選んで戦います。' : '') + '人数と名前はタイトルの「みんなで遊ぶ」で変えられます。';
   $('lenSeg').querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.v === S.length)));
   $('lenHint').textContent = LEN[S.length].hint;
   const c = Kit.ai.current();
@@ -473,13 +581,14 @@ function drawEntry(){
   const i = S.cur;
   $('entryPanel').className = `k-panel fc${i}`;
   $('entryWho').textContent = `${S.players[i]} のキャラ`;
-  $('entryStep').textContent = S.players.length > 1 ? `${i + 1} / ${S.players.length}人目　ほかの人は見ないでね` : '各6文字まで';
+  $('entryStep').textContent = S.players.length > 1 ? `${i + 1} / ${S.players.length}人目　ほかの人は見ないでね` : `各${MAXLEN}文字まで`;
   const v = S.inputs[i] || {};
   $('entryForm').innerHTML = FIELDS.map(f => `<div class="fld">
       <label for="f_${f.k}">${f.label}</label>
-      <input class="k-input" id="f_${f.k}" name="${f.k}" maxlength="12" placeholder="${esc(f.ph)}" value="${esc(v[f.k] || '')}" enterkeyhint="next">
+      <input class="k-input" id="f_${f.k}" name="${f.k}" maxlength="20" placeholder="${esc(f.ph)}" value="${esc(v[f.k] || '')}" enterkeyhint="next">
       <span class="cnt" id="c_${f.k}"></span></div>`).join('');
   FIELDS.forEach(f => drawCount(f.k));
+  drawRosterPick();
   drawGen();
   setTimeout(() => { const el = $('f_name'); if(el && !el.value) el.focus(); }, 50);
 }
@@ -511,30 +620,83 @@ $('entryForm').addEventListener('submit', e => {
     inp[f.k] = v;
   }
   const i = S.cur;
-  if(S.inputs.some((x, j) => x && j !== i && x.name === inp.name)){
+  if(nameTaken(inp.name, i)){
     Kit.toast('同じキャラ名がすでにいます。別の名前にしてください'); Kit.shake($('f_name')); Kit.SE.play('ng'); $('f_name').focus(); return;
   }
   S.inputs[i] = inp;
   startGen(i); // ここで生成開始。待たずに次の人へ
   Kit.SE.play('whoosh');
+  advanceEntry();
+});
+const nameTaken = (name, i) => S.inputs.some((x, j) => x && j !== i && x.name === name);
+function advanceEntry(){
+  const i = S.cur;
   if(i + 1 < S.players.length){
     S.cur = i + 1; drawEntry(); window.scrollTo(0, 0);
     Kit.toast(`次は ${S.players[S.cur]} さんの番`, 1400);
+  } else if(S.players.length === 1){
+    S.phase = 'foe'; drawFoe(); Kit.screen('sFoe'); window.scrollTo(0, 0);
   } else {
-    if(S.players.length === 1) addEnemy();
     S.phase = 'wait'; drawWait(); Kit.screen('sWait'); checkAllReady();
   }
-});
-function addEnemy(){
-  const e = pick(window.MOJI_ENEMIES || []);
-  S.enemy = true;
-  S.inputs[1] = { name: e.name, ...e.input };
-  S.chars[1] = { ok: true, enemy: true, ...JSON.parse(JSON.stringify(e)) };
 }
+/* 保存キャラから選ぶ */
+function drawRosterPick(){
+  const r = getRoster();
+  $('rosterPanel').hidden = !r.length;
+  $('rosterList').innerHTML = r.map(c => rosterItem(c, `data-pick="${esc(c.id)}"`, S.cur, true)).join('');
+}
+$('rosterList').addEventListener('click', e => {
+  const del = e.target.closest('[data-del]');
+  if(del){
+    // 2回押しで削除（誤操作防止）
+    if(!del.classList.contains('arm')){
+      del.classList.add('arm'); del.textContent = '消す?'; Kit.SE.play('tick');
+      setTimeout(() => { if(del.isConnected){ del.classList.remove('arm'); del.textContent = '削除'; } }, 2500);
+      return;
+    }
+    removeSaved(del.dataset.del); Kit.SE.play('slide'); Kit.toast('保存キャラを削除しました'); drawRosterPick(); return;
+  }
+  const b = e.target.closest('[data-pick]'); if(!b) return;
+  const c = getRoster().find(x => x.id === b.dataset.pick); if(!c) return;
+  const i = S.cur;
+  if(nameTaken(c.name, i)){ Kit.toast('同じキャラ名がすでにいます。別のキャラを選んでください'); Kit.shake(b); Kit.SE.play('ng'); return; }
+  S.inputs[i] = { name: c.name, ...(c.input || {}) };
+  S.chars[i] = { ok: true, saved: true, ...cleanChar(c) };
+  Kit.SE.play('ok'); Kit.toast(`${c.name} で決定！`, 1200);
+  advanceEntry();
+});
+/* 対戦相手（1人のとき） */
+function drawFoe(){
+  const mine = S.inputs[0] ? S.inputs[0].name : '';
+  $('foeHint').textContent = `${mine ? `あなたのキャラ「${mine}」` : 'あなたのキャラ'}と戦う相手を選んでください`;
+  $('foeEnemies').innerHTML = (window.MOJI_ENEMIES || []).map((c, k) => c.name === mine ? '' : rosterItem(c, `data-foe="e:${k}"`, 1, false)).join('');
+  const r = getRoster().filter(c => c.name !== mine);
+  $('foeSaved').innerHTML = r.length ? r.map(c => rosterItem(c, `data-foe="s:${esc(c.id)}"`, 1, false)).join('')
+    : '<p class="ro-empty">まだありません。入場や結果の画面で「保存」したキャラがここに並びます。</p>';
+}
+function setFoe(c, preset){
+  S.enemy = true;
+  S.inputs[1] = { name: c.name, ...(c.input || {}) };
+  S.chars[1] = { ok: true, enemy: true, preset: !!preset, ...cleanChar(c) };
+  Kit.SE.play('start');
+  S.phase = 'wait'; drawWait(); Kit.screen('sWait'); checkAllReady();
+}
+$('btnFoeRandom').addEventListener('click', () => {
+  const mine = S.inputs[0] && S.inputs[0].name;
+  const all = [...(window.MOJI_ENEMIES || []).map(c => [c, true]), ...getRoster().map(c => [c, false])].filter(([c]) => c.name !== mine);
+  const [c, preset] = pick(all); setFoe(c, preset);
+});
+document.getElementById('sFoe').addEventListener('click', e => {
+  const b = e.target.closest('[data-foe]'); if(!b) return;
+  const [t, id] = [b.dataset.foe.slice(0, 1), b.dataset.foe.slice(2)];
+  if(t === 'e'){ const c = (window.MOJI_ENEMIES || [])[+id]; if(c) setFoe(c, true); }
+  else { const c = getRoster().find(x => x.id === id); if(c) setFoe(c, false); }
+});
 function genRows(){
   return S.inputs.map((inp, i) => {
     const c = S.chars[i] || {};
-    const who = S.enemy && i === 1 ? '敵キャラ' : S.players[i];
+    const who = S.enemy && i === 1 ? ownerOf(1) : S.players[i];
     const st = c.ok ? '<span class="st ok">完成</span>' : c.error ? '<span class="st ng">失敗</span>' : '<span class="spin" aria-hidden="true"></span><span class="st">生成中</span>';
     return `<li class="fc${i}"><span class="dot"></span>${esc(who)}：${esc(c.ok ? c.name : inp.name)}${st}</li>`;
   }).join('');
@@ -568,7 +730,18 @@ $('btnLocalGen').addEventListener('click', () => {
 /* =========================================================
    入場 → 対峙
    ========================================================= */
-function ownerOf(i){ return S.enemy && i === 1 ? '敵キャラ' : `${S.players[i]} のキャラ`; }
+function ownerOf(i){ return S.enemy && i === 1 ? (S.chars[1] && S.chars[1].preset === false ? '対戦相手（保存キャラ）' : '敵キャラ') : `${S.players[i]} のキャラ`; }
+function saveBtn(c, i){
+  if(c.preset) return '';
+  return isSaved(c) ? '<button type="button" class="k-btn k-btn--sm" disabled>保存済み</button>'
+    : `<button type="button" class="k-btn k-btn--sm" data-save="${i}" data-se="none">このキャラを保存</button>`;
+}
+document.addEventListener('click', e => {
+  const b = e.target.closest('[data-save]'); if(!b) return;
+  const c = S.chars[+b.dataset.save]; if(!c || !c.ok) return;
+  if(saveChar(c)){ b.textContent = '保存済み'; b.disabled = true; b.removeAttribute('data-save'); Kit.SE.play('save'); Kit.toast(`${c.name} を保存しました`); }
+  else { Kit.SE.play('ng'); Kit.toast('保存できませんでした（端末の空き容量を確認してください）'); }
+});
 function cardHtml(c, i, stamp){
   return `<article class="cc fc${i}">
     ${stamp ? '<span class="entered">入場!</span>' : ''}
@@ -580,6 +753,7 @@ function cardHtml(c, i, stamp){
     <div class="stats"><div><b>${c.stats.hp}</b><span>HP</span></div><div><b>${c.stats.atk}</b><span>攻撃</span></div><div><b>${c.stats.def}</b><span>防御</span></div><div><b>${c.stats.spd}</b><span>速さ</span></div></div>
     <div class="sp"><b>必殺：${esc(c.special.name)}</b>${c.special.desc ? `<br>${esc(c.special.desc)}` : ''}</div>
     ${c.quote ? `<p class="quote">「${esc(c.quote)}」</p>` : ''}
+    <div class="cc-act">${saveBtn(c, i)}</div>
   </article>`;
 }
 let introIdx = 0, battlePromise = null;
@@ -610,8 +784,8 @@ function prefetchBattle(){
 function toVersus(){
   S.phase = 'versus';
   const n = S.chars.length;
-  const fs = name => { const l = len(name); return l <= 3 ? 26 : l <= 4 ? 22 : l <= 5 ? 19 : 16; };
-  const cards = S.chars.map((c, i) => `<div class="vs-card fc${i} ${i % 2 ? 'vs-r' : 'vs-l'}"><div class="nm" style="font-size:${n === 2 ? fs(c.name) : fs(c.name) + 2}px">${esc(c.name)}</div><div class="ttl">${esc(c.title)}</div><div class="own">${esc(S.enemy && i === 1 ? '敵キャラ' : S.players[i])}</div></div>`);
+  const fs = name => { const l = len(name); return l <= 3 ? 26 : l <= 4 ? 22 : l <= 5 ? 19 : l <= 6 ? 16 : l <= 8 ? 13 : 11; };
+  const cards = S.chars.map((c, i) => `<div class="vs-card fc${i} ${i % 2 ? 'vs-r' : 'vs-l'}"><div class="nm" style="font-size:${n === 2 ? fs(c.name) : fs(c.name) + 2}px">${esc(c.name)}</div><div class="ttl">${esc(c.title)}</div><div class="own">${esc(S.enemy && i === 1 ? ownerOf(1) : S.players[i])}</div></div>`);
   $('vsWrap').className = `vs-wrap n${n}`;
   $('vsWrap').innerHTML = n === 2 ? `${cards[0]}<div class="vs">VS</div>${cards[1]}` : `${cards.join('')}<div class="vs vs-mid">VS</div>`;
   Kit.screen('sVersus'); Kit.SE.play('whoosh'); setTimeout(() => Kit.SE.play('stamp'), 700);
@@ -655,16 +829,39 @@ function addLine(ev, big){
   while(feed.children.length > 6) feed.firstElementChild.remove();
 }
 let autoT = 0;
+let cutinBusy = false;
 function nextLine(){
   clearTimeout(autoT);
-  if(S.phase !== 'battle') return;
+  if(S.phase !== 'battle' || cutinBusy) return;
   const evs = S.battle.events;
   if(S.shown >= evs.length){ finish(); return; }
   const ev = evs[S.shown++];
+  if(ev.special != null && S.chars[ev.special]){
+    cutinBusy = true; $('btnNext').disabled = true;
+    cutIn(ev.special).then(() => { cutinBusy = false; $('btnNext').disabled = false; if(S.phase === 'battle') showLine(ev); });
+    return;
+  }
+  showLine(ev);
+}
+// 必殺技カットイン
+function cutIn(i){
+  const c = S.chars[i];
+  const el = document.createElement('div');
+  el.className = `cutin fc${i}`; el.setAttribute('role', 'alert');
+  el.innerHTML = `<div class="band"><span class="lbl">必殺技</span><span class="who">${esc(c.name)}</span><span class="spn">${esc(c.special.name)}</span></div><div class="flash"></div>`;
+  document.body.appendChild(el);
+  Kit.SE.play('whoosh');
+  setTimeout(() => Kit.SE.play('stamp'), 260);
+  setTimeout(() => Kit.SE.play('go'), 420);
+  if(navigator.vibrate) navigator.vibrate([40, 60, 80]);
+  return new Promise(r => setTimeout(() => { el.remove(); r(); }, 1550));
+}
+function showLine(ev){
+  const evs = S.battle.events;
   const hits = new Set();
   Object.entries(ev.hp || {}).forEach(([k, v]) => { const i = +k; if(v < S.hp[i]) hits.add(i); S.hp[i] = v; });
   const last = S.shown >= evs.length;
-  addLine(ev, last);
+  addLine(ev, last || ev.special != null);
   drawHud(hits);
   if(hits.size){ Kit.SE.play(Object.values(ev.hp).some(v => v === 0) ? 'stamp' : 'ng'); if(navigator.vibrate) navigator.vibrate(30); }
   else Kit.SE.play(ev.speaker === '解説' ? 'tick' : 'pop');
@@ -730,6 +927,10 @@ if(saved && saved.phase && saved.phase !== 'setup'){
     S.phase = 'wait';
     S.inputs.forEach((inp, i) => { if(!(S.chars[i] && S.chars[i].ok)) startGen(i); });
     Kit.screen('sWait'); checkAllReady();
+  } else if(S.phase === 'foe'){
+    if(!(S.chars[0] && S.chars[0].ok)) startGen(0);
+    S.inputs.length = 1; S.chars.length = 1; S.enemy = false;
+    drawFoe(); Kit.screen('sFoe');
   } else if(S.phase === 'versus'){
     if(!S.battle) prefetchBattle();
     toVersus();

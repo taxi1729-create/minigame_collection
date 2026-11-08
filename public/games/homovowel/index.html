@@ -28,7 +28,9 @@
 // ═══════════════════════════════════════════════════════════════
 const GH_BRANCH = "main";
 const DB_PATH   = "database.json";
-const GENERATE_TARGET = 20;
+const BATCH = 5;          // 1回のAI生成で増やす語数
+const MAX_ROUNDS = 10;    // ラウンド数の上限
+const VOWEL_BAR = 20;     // 単語一覧の集計バーの目盛り
 const GEMINI_MODEL    = "gemini-2.0-flash";
 //const GEMINI_MODEL = "gemini-1.5-flash-latest";
 // localStorage キー
@@ -186,22 +188,48 @@ async function aiResolveReading(reading){
   }
 }
 
-async function aiGenerateHomovowels(targetReading,targetWord,existing,needed){
-  const vp=getVowels(targetReading);
-  const el=existing.map(e=>`${e.word}（${e.reading}）`).join("、");
-  const prompt=`あなたは日本語の同母音異義語の専門家です。以下の条件で単語を${needed}個生成してください。
-■母音パターン:${vp.toUpperCase()} ■お題単語:${targetWord}（${targetReading}）
-■既存リスト（重複禁止）:${el||"なし"}
-■同母音の定義:伸ばし棒（ー）は直前の母音を繰り返す。拗音は1音節（しゃ→ya）。
-例:「登山」tozan→oan/「ロマン」roman→oan←同じ！
-■必須:母音パターン完全一致・2〜6音節の実在する日本語・重複なし・意味30文字以内
-■出力形式（JSONのみ。前置き・コードブロック不要）:
-{"words":[{"word":"表記","reading":"よみがな","meaning":"説明"}],"exhausted":false}
-これ以上存在しない場合:{"words":[],"exhausted":true}`;
-  try{
-    const text=await callAI(prompt,2000);
-    return parseAI(text);
-  }catch{return {words:[],exhausted:false};}
+// 同じ母音の言葉を AI で BATCH 語つくる（登録済みの言葉は出さない）
+const VK={a:"あ",i:"い",u:"う",e:"え",o:"お",n:"ん"};
+const vowelKana=v=>[...v].map(c=>VK[c]||c).join("・");
+const HV_SYSTEM="あなたは日本語の語彙に詳しいアシスタントです。指定されたJSONだけを出力し、前置き・説明・コードブロックは書きません。";
+function homovowelPrompt(reading,word,exclude,ask){
+  const vp=getVowels(reading);
+  return `母音の並びが「${vowelKana(vp)}」（${vp.length}拍）になる実在の日本語の単語を${ask}個挙げてください。
+
+数え方: 1拍ずつ母音だけを取る。「ん」は「ん」、「ー」は直前の母音、「っ」は数えない、「きょ」「しゃ」などは1拍。
+例: ${word}（${reading}）→ ${vowelKana(vp)}
+条件:
+- 一般によく知られた名詞を優先（固有名詞・造語・活用形は避ける）
+- 各語の読みを上の数え方で分解し、完全に一致するものだけを出す
+- 次の語は出さない: ${exclude.join("、")}
+- meaning は25文字以内で、その語自体や読みを使わない説明
+
+出力（このJSONのみ）:
+{"words":[{"word":"表記","reading":"ひらがなの読み","vowels":"${vowelKana(vp)}","meaning":"意味"}]}
+該当する語がもう無いときは {"words":[]}`;
+}
+async function aiGenerateHomovowels(reading,word,registered,want=BATCH){
+  const seen=new Set(registered.map(w=>w.reading));
+  const words=[];let none=false;
+  // 条件に合わない語は捨てるので多めに頼む。足りなければもう1回
+  for(let t=0;t<2&&words.length<want;t++){
+    const exclude=[reading,...registered.map(w=>w.reading),...words.map(w=>w.reading)].filter((x,i,a)=>a.indexOf(x)===i).slice(-80);
+    let list=[];
+    try{
+      const r=await Kit.ai.ask({system:HV_SYSTEM,prompt:homovowelPrompt(reading,word,exclude,(want-words.length)+3),json:true,maxTokens:1200});
+      list=Array.isArray(r.json&&r.json.words)?r.json.words:[];
+    }catch(e){ console.warn(e); if(t===0&&!words.length) return {words:[],exhausted:false,error:(e&&e.message)||"AIエラー"}; break; }
+    if(!list.length){ none=true; break; }
+    for(const w of list){
+      const rd=String(w&&w.reading||"").replace(/\s+/g,"").replace(/[ァ-ン]/g,c=>String.fromCharCode(c.charCodeAt(0)-0x60));
+      const wd=String(w&&w.word||"").trim();
+      if(!rd||!wd||seen.has(rd)||!isSameVowel(rd,reading)) continue;
+      seen.add(rd);
+      words.push({word:wd.slice(0,20),reading:rd,meaning:String(w.meaning||"").trim().slice(0,40)||`${wd}のこと`});
+      if(words.length>=want) break;
+    }
+  }
+  return {words,exhausted:none&&!words.length};
 }
 
 async function aiGenerateHint(answerWord,answerReading){
@@ -338,9 +366,9 @@ function WordListScreen({db,sha,onSave,onBack}){
           <div key={v} style={{display:"flex",alignItems:"center",gap:"8px",marginBottom:"6px"}}>
             <button style={{background:"none",border:"none",cursor:"pointer",padding:0}} onClick={()=>setFVowel(v)}><Tag bg={C.yellow}>{v.toUpperCase()}</Tag></button>
             <div style={{flex:1,height:"12px",background:C.gray,border:`2px solid ${C.black}`,overflow:"hidden"}}>
-              <div style={{width:`${Math.min(100,cnt/GENERATE_TARGET*100)}%`,height:"100%",background:cnt>=GENERATE_TARGET?C.green:C.yellow}}/>
+              <div style={{width:`${Math.min(100,cnt/VOWEL_BAR*100)}%`,height:"100%",background:cnt>=VOWEL_BAR?C.green:C.yellow}}/>
             </div>
-            <span style={{color:C.black,fontSize:"0.78rem",minWidth:"52px"}}>{cnt}/{GENERATE_TARGET}</span>
+            <span style={{color:C.black,fontSize:"0.78rem",minWidth:"52px"}}>{cnt}語</span>
             {db.exhausted?.[v]&&<Tag bg={C.red}>上限</Tag>}
           </div>
         ))}
@@ -450,44 +478,45 @@ function TitleScreen({onStart,onWordList,db,sha,onDbUpdate}){
     const alreadyIn=currentDb.words.find(w=>w.reading===reading&&w.word===topicWord);
     if(!alreadyIn) currentDb.words.push({id:generateId(),word:topicWord,reading:reading,meaning:topicMeaning,charCount:countKana(reading)});
 
-    const existing=currentDb.words.filter(w=>isSameVowel(w.reading,reading)&&!(w.reading===reading&&w.word===topicWord));
+    // 同じ母音の登録語（お題も含む）。AIにはこれ以外の言葉を BATCH 語だけ頼む
+    const registered=currentDb.words.filter(w=>isSameVowel(w.reading,reading));
+    const existing=registered.filter(w=>!(w.reading===reading&&w.word===topicWord));
     const isExhausted=!!currentDb.exhausted?.[vowelPat];
-    const needMore=existing.length<GENERATE_TARGET&&!isExhausted;
+    // ラウンド数の上限 = 登録語数 + 新しく作る5語（最大10）
+    let playRounds=Math.min(rounds,MAX_ROUNDS,Math.max(1,existing.length+(geminiKey&&!isExhausted?BATCH:0)));
 
-    if(needMore){
-      const needed=GENERATE_TARGET-existing.length;
-      setGenLog(`同母音語を AI が生成中... (${needed}語追加予定)`);
-      if(!geminiKey){
-        setGenLog(`AIが使えないため内蔵の言葉で開始します（${Kit.ai.reason()}）`);
-        await new Promise(r=>setTimeout(r,600));
-      }else{
-        const result=await aiGenerateHomovowels(reading,topicWord,existing,needed);
-        if(result.words?.length>0){
-          result.words.forEach(w=>{
-            if(!isSameVowel(w.reading,reading))return;
-            if(!currentDb.words.find(x=>x.word===w.word&&x.reading===w.reading))
-              currentDb.words.push({id:generateId(),word:w.word,reading:w.reading,meaning:w.meaning,charCount:countKana(w.reading)});
-          });
-          setGenLog(`${result.words.length}語追加しました`);
-        }
-        if(result.exhausted){currentDb.exhausted[vowelPat]=true;}
-        currentDb.updatedAt=new Date().toISOString();
-        const {newSha}=await saveDB(currentDb,sha);
-        onDbUpdate(currentDb,newSha||sha);
-      }
+    if(geminiKey&&!isExhausted){
+      setGenLog(`同じ母音の新しい言葉を AI が${BATCH}語つくっています…`);
+      const result=await aiGenerateHomovowels(reading,topicWord,registered,BATCH);
+      result.words.forEach(w=>{
+        if(!currentDb.words.find(x=>x.reading===w.reading))
+          currentDb.words.push({id:generateId(),word:w.word,reading:w.reading,meaning:w.meaning,charCount:countKana(w.reading)});
+      });
+      if(result.exhausted){currentDb.exhausted[vowelPat]=true;}
+      setGenLog(result.error?`AIエラー：${result.error}（登録済みの言葉で開始）`:result.words.length?`${result.words.length}語追加しました`:"新しい言葉は見つかりませんでした");
+      currentDb.updatedAt=new Date().toISOString();
+      const {newSha}=await saveDB(currentDb,sha);
+      onDbUpdate(currentDb,newSha||sha);
     }else{
-      setGenLog(isExhausted?"上限記録済み — 既存データを使用":`DB内 ${existing.length}語 ✓`);
-      await new Promise(r=>setTimeout(r,400));
+      setGenLog(!geminiKey?`AIが使えないため登録済みの言葉で開始します（${Kit.ai.reason()}）`:isExhausted?"上限記録済み — 登録済みの言葉を使用":`登録 ${existing.length}語 ✓`);
+      await new Promise(r=>setTimeout(r,500));
     }
 
     const pool=currentDb.words.filter(w=>isSameVowel(w.reading,reading)&&!(w.reading===reading&&w.word===topicWord));
+    if(!pool.length){ setGenerating(false); setGenLog(""); Kit.SE.play("ng"); Kit.toast("同じ母音の言葉が見つかりませんでした。別のお題にしてください"); return; }
+    if(playRounds>pool.length){ playRounds=pool.length; Kit.toast(`言葉が${pool.length}語だったので${playRounds}ラウンドで遊びます`); }
     setGenerating(false);
-    onStart({players,rounds,topic:{word:topicWord,reading:reading,meaning:topicMeaning},pool});
+    onStart({players,rounds:playRounds,topic:{word:topicWord,reading:reading,meaning:topicMeaning},pool});
   };
 
   const vowelPreview=topicReading?getVowels(topicReading):"";
-  const dbCount=topicReading?(db.words||[]).filter(w=>isSameVowel(w.reading,topicReading)&&!(w.reading===topicReading&&w.word===topicReading)).length:0;
+  const dbCount=topicReading?(db.words||[]).filter(w=>isSameVowel(w.reading,topicReading)&&w.reading!==topicReading).length:0;
   const isExhausted=vowelPreview?!!db.exhausted?.[vowelPreview]:false;
+  // ラウンド数の上限：登録語数＋5（AIで足す分）、最大10。お題が空ならランダムで決まるので10まで
+  const addable=geminiKey&&!isExhausted?BATCH:0;
+  const maxRounds=topicReading.trim()?Math.max(1,Math.min(MAX_ROUNDS,dbCount+addable)):MAX_ROUNDS;
+  useEffect(()=>{ if(rounds>maxRounds) setRounds(maxRounds); },[maxRounds]);
+  const shownRounds=Math.min(rounds,maxRounds);
 
   return <div style={{minHeight:"100vh",background:"transparent",padding:"32px 16px"}}>
     <div style={{textAlign:"center",marginBottom:"28px"}}>
@@ -512,8 +541,8 @@ function TitleScreen({onStart,onWordList,db,sha,onDbUpdate}){
         {topicReading&&<div style={{marginTop:"10px",display:"flex",gap:"8px",flexWrap:"wrap"}}>
           <Tag>母音: {vowelPreview.toUpperCase()}</Tag>
           <Tag bg={C.gray}>{countKana(topicReading)}音節</Tag>
-          <Tag bg={dbCount>=GENERATE_TARGET?C.green:dbCount>0?C.yellow:C.gray}>
-            DB: {dbCount}語{dbCount<GENERATE_TARGET&&!isExhausted?` → AI生成: ${GENERATE_TARGET-dbCount}語`:" ✓"}
+          <Tag bg={dbCount>=MAX_ROUNDS?C.green:dbCount>0?C.yellow:C.gray}>
+            登録: {dbCount}語{addable?` → AIで+${BATCH}語`:""}
           </Tag>
           {isExhausted&&<Tag bg={C.red}>上限記録済み</Tag>}
         </div>}
@@ -524,10 +553,13 @@ function TitleScreen({onStart,onWordList,db,sha,onDbUpdate}){
 
       {/* ラウンド数 */}
       <Card>
-        <Lbl>◆ ラウンド数: {rounds}回</Lbl>
-        <input type="range" min="1" max="10" value={rounds} onChange={e=>setRounds(Number(e.target.value))} style={{width:"100%",accentColor:C.yellow,height:"8px"}}/>
+        <Lbl>◆ ラウンド数: {shownRounds}回</Lbl>
+        <input type="range" min="1" max={maxRounds} value={shownRounds} disabled={maxRounds<=1} onChange={e=>setRounds(Number(e.target.value))} style={{width:"100%",accentColor:C.yellow,height:"8px"}}/>
         <div style={{display:"flex",justifyContent:"space-between",fontSize:"0.72rem",marginTop:"4px",color:C.midGray}}>
-          <span>1回</span><span style={{fontFamily:FD,fontSize:"1.6rem",color:C.red}}>{rounds}回</span><span>10回</span>
+          <span>1回</span><span style={{fontFamily:FD,fontSize:"1.6rem",color:C.red}}>{shownRounds}回</span><span>{maxRounds}回</span>
+        </div>
+        <div style={{marginTop:"6px",fontSize:"0.72rem",color:C.midGray}}>
+          {topicReading.trim()?`上限は登録されている言葉の数${addable?`＋${BATCH}`:""}（最大${MAX_ROUNDS}回）`:`お題がランダムのときは、決まったお題の言葉の数に合わせて調整します（最大${MAX_ROUNDS}回）`}
         </div>
       </Card>
 
