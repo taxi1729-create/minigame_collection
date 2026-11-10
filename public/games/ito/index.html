@@ -1,0 +1,740 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>ito（イトクシマ） | あそびばこ</title>
+<link rel="stylesheet" href="../../kit/kit.css">
+<style>
+:root{ --sea:#5b8fc7; --sea2:#3c6ea8; --ok:#2fae62; --ng:#e8433a; }
+
+/* ---- タイトル ---- */
+.hero{position:relative;text-align:center;padding:14px 10px 12px;overflow:hidden}
+.hero .logo{width:min(46vw,190px);aspect-ratio:1;object-fit:contain;display:block;margin:4px auto 0;filter:drop-shadow(4px 4px 0 var(--k-ink));animation:bob 3.2s ease-in-out infinite}
+@keyframes bob{50%{transform:translateY(-6px) rotate(-2deg)}}
+.hero h1{margin:6px 0 0}
+.hero .sub{margin:4px 0 0;font-weight:900;font-size:14px}
+.hero .plane{position:absolute;top:8px;left:0;width:96px;pointer-events:none;animation:fly 9s linear infinite}
+@keyframes fly{0%{transform:translateX(-120px) translateY(6px) rotate(-4deg)}50%{transform:translateX(calc(50vw)) translateY(-4px) rotate(3deg)}100%{transform:translateX(calc(100vw + 40px)) translateY(8px) rotate(-4deg)}}
+.members{display:flex;flex-wrap:wrap;gap:6px}
+.rec-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-top:8px}
+.rec-grid div{border:2px solid var(--k-ink);border-radius:10px;background:var(--k-label2);text-align:center;padding:4px 2px}
+.rec-grid div.on{background:var(--k-yellow)}
+.rec-grid b{display:block;font-family:var(--k-display);font-weight:400;font-size:22px;line-height:1.2}
+.rec-grid span{display:block;font-size:11px;font-weight:900;color:var(--k-ink2)}
+
+/* ---- 目盛り ---- */
+.scale{display:grid;grid-template-columns:auto 1fr auto;gap:8px;align-items:center;margin-top:10px;font-size:13px;font-weight:900}
+.scale .end{display:grid;justify-items:center;line-height:1.2;max-width:34vw}
+.scale .end b{font-family:var(--k-display);font-weight:400;font-size:20px}
+.scale .end span{font-size:12px;text-align:center;overflow-wrap:anywhere}
+.scale .rail{position:relative;height:14px;border:3px solid var(--k-ink);border-radius:99px;background:linear-gradient(90deg,#cfe0f3,var(--sea))}
+.scale .pin{position:absolute;top:50%;width:26px;height:26px;margin:-13px 0 0 -13px;border-radius:50%;background:var(--k-pink);border:3px solid var(--k-ink);box-shadow:2px 2px 0 var(--k-ink);transition:left .8s cubic-bezier(.2,1.3,.4,1)}
+
+/* ---- お題 ---- */
+.theme-card{position:relative;background:var(--k-label);border:4px solid var(--k-ink);border-radius:18px;box-shadow:6px 6px 0 var(--sea2);padding:18px 14px 16px;text-align:center;overflow:hidden}
+.theme-card::before{content:"";position:absolute;inset:0 0 auto;height:12px;background:repeating-linear-gradient(90deg,var(--sea) 0 18px,var(--k-label) 18px 26px)}
+.theme-card .lbl{display:inline-block;margin-top:6px;font-size:12px;font-weight:900;background:var(--k-ink);color:#fff;border-radius:99px;padding:1px 10px}
+.theme-text{font-family:var(--k-display);font-size:clamp(22px,7vw,32px);line-height:1.3;margin:10px 0 0;min-height:2.6em;display:grid;place-items:center;overflow-wrap:anywhere}
+.theme-text.spin{color:var(--k-ink2);filter:blur(.4px)}
+.theme-text.land{animation:land .5s cubic-bezier(.2,1.8,.4,1)}
+@keyframes land{from{transform:scale(1.5);opacity:.3}to{transform:none;opacity:1}}
+.custom{margin-top:4px}
+.custom summary{cursor:pointer;font-weight:900;font-size:14px;padding:6px 0}
+.custom .k-input{margin-top:6px}
+.custom .two{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+
+/* ---- 数字配り ---- */
+.deal-who{font-family:var(--k-display);font-size:clamp(26px,8vw,36px);line-height:1.2;margin:6px 0 0;overflow-wrap:anywhere}
+.flip{perspective:900px;margin:12px auto 0;width:min(70vw,250px);aspect-ratio:3/4}
+.flip .in{position:relative;width:100%;height:100%;transform-style:preserve-3d;transition:transform .6s cubic-bezier(.3,1.3,.5,1)}
+.flip.open .in{transform:rotateY(180deg)}
+.flip .face{position:absolute;inset:0;backface-visibility:hidden;-webkit-backface-visibility:hidden;border:4px solid var(--k-ink);border-radius:18px;box-shadow:6px 6px 0 var(--k-ink);display:grid;place-items:center;overflow:hidden}
+.flip .back{background:repeating-linear-gradient(45deg,var(--sea) 0 14px,var(--sea2) 14px 28px)}
+.flip .back img{width:72%;aspect-ratio:1;object-fit:contain;background:var(--k-label);border-radius:50%;border:4px solid var(--k-ink)}
+.flip .front{transform:rotateY(180deg);background:var(--k-label);align-content:center;gap:4px}
+.flip .front small{font-weight:900;color:var(--k-ink2);font-size:14px}
+.flip .front b{font-family:var(--k-display);font-weight:400;font-size:clamp(80px,26vw,110px);line-height:1;color:var(--sea2);text-shadow:4px 4px 0 var(--k-yellow)}
+.dots{display:flex;gap:6px;justify-content:center;flex-wrap:wrap;margin-top:10px}
+.dots i{width:12px;height:12px;border-radius:50%;border:2px solid var(--k-ink);background:var(--k-label2)}
+.dots i.done{background:var(--sea)}
+.dots i.now{background:var(--k-pink)}
+
+/* ---- 並べる ---- */
+.timer{position:relative;margin-top:30px;height:18px;border:3px solid var(--k-ink);border-radius:99px;background:var(--k-label2)}
+.timer i{position:absolute;inset:0 auto 0 0;width:100%;border-radius:99px;background:var(--sea);transform-origin:left;transition:transform .25s linear}
+.timer.low i{background:var(--k-pink)}
+.timer .car{position:absolute;bottom:2px;width:54px;margin-left:-27px;pointer-events:none;transition:left .25s linear}
+.timer.paused{opacity:.55}
+.time-row{display:flex;justify-content:space-between;align-items:center;font-weight:900;margin-top:6px}
+.time-row .t{font-family:var(--k-display);font-size:26px;font-variant-numeric:tabular-nums}
+.time-row .t.low{color:var(--k-pink);animation:beat .5s infinite alternate}
+@keyframes beat{to{transform:scale(1.12)}}
+.edge{display:flex;align-items:center;gap:8px;font-weight:900;font-size:13px;margin:4px 2px}
+.edge b{font-family:var(--k-display);font-weight:400;font-size:18px;background:var(--k-ink);color:#fff;border-radius:8px;padding:0 8px}
+.edge span{overflow-wrap:anywhere}
+.plist{position:relative;display:grid;gap:8px;margin:6px 0;padding:0;list-style:none;touch-action:none}
+.pc{position:relative;display:grid;grid-template-columns:30px 1fr auto auto;gap:8px;align-items:center;background:var(--k-label);border:3px solid var(--k-ink);border-radius:14px;box-shadow:4px 4px 0 var(--sea2);padding:8px 8px 8px 10px;user-select:none;-webkit-user-select:none;touch-action:none;cursor:grab;z-index:1}
+.pc .rank{font-family:var(--k-display);font-size:16px;color:var(--k-ink2);text-align:center}
+.pc .nm{font-weight:900;font-size:18px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pc .grip{width:22px;height:22px;opacity:.5}
+.pc .mv{display:flex;gap:4px}
+.pc .mv button{width:34px;height:34px;border:2px solid var(--k-ink);border-radius:9px;background:var(--k-label2);font-weight:900;color:var(--k-ink);cursor:pointer;touch-action:manipulation}
+.pc .mv button:disabled{opacity:.3}
+.pc.drag{z-index:5;cursor:grabbing;box-shadow:8px 10px 0 var(--k-pink);transition:none}
+.pc .peek{font-family:var(--k-display);font-size:20px;color:var(--k-pink)}
+.peeking .pc{box-shadow:4px 4px 0 var(--k-pink);border-style:dashed}
+.ctrl3{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.k-btn[aria-pressed="true"]{background:var(--k-yellow)}
+#btnSubmit.armed{background:var(--k-pink);color:#fff;animation:beat .45s infinite alternate}
+
+/* ---- 結果 ---- */
+.status{font-family:var(--k-display);font-size:clamp(22px,7vw,30px);text-align:center;margin:0;min-height:1.4em}
+.status.ok{color:var(--ok)} .status.ng{color:var(--ng)}
+.rc{display:grid;grid-template-columns:30px 1fr auto;gap:8px;align-items:center;background:var(--k-label);border:3px solid var(--k-ink);border-radius:14px;box-shadow:4px 4px 0 var(--k-ink2);padding:8px 12px 8px 10px;cursor:pointer;transition:background .6s,box-shadow .3s}
+.rc .rank{font-family:var(--k-display);font-size:16px;color:var(--k-ink2);text-align:center}
+.rc .nm{font-weight:900;font-size:18px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.rc .num{min-width:58px;min-height:34px;text-align:center;font-family:var(--k-display);font-size:22px;border:3px solid var(--k-ink);border-radius:10px;background:var(--sea);color:transparent;transition:color .2s}
+.rc .num::before{content:"？";color:#fff}
+.rc.open .num{background:#fff;color:var(--k-ink);animation:numIn .5s cubic-bezier(.2,1.6,.4,1)}
+.rc.open .num::before{content:none}
+@keyframes numIn{from{transform:rotateX(90deg)}to{transform:none}}
+.rc.ok{background:#d9f5e4;box-shadow:4px 4px 0 var(--ok)}
+.rc.ok.pop{animation:pop .45s cubic-bezier(.2,1.8,.4,1)}
+@keyframes pop{40%{transform:scale(1.06)}}
+.rc.ng{background:#ffd9d6;box-shadow:4px 4px 0 var(--ng)}
+.rc.ng .num{background:var(--ng);color:#fff}
+.rc .why{grid-column:2/-1;font-size:12px;font-weight:900;color:var(--ng)}
+.rainbow .rc{animation:rb 2.4s linear infinite}
+.rainbow .rc:nth-child(2n){animation-delay:-.6s}
+.rainbow .rc:nth-child(3n){animation-delay:-1.2s}
+@keyframes rb{0%{background:#ffd6ea}25%{background:#fff3c4}50%{background:#d4f6ee}75%{background:#dbe5ff}100%{background:#ffd6ea}}
+.modes{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.zoom{position:fixed;top:30%;left:0;width:min(60vw,260px);z-index:70;pointer-events:none;animation:zoom 1.7s cubic-bezier(.5,0,.5,1) forwards}
+@keyframes zoom{from{transform:translateX(-110%)}to{transform:translateX(calc(100vw + 10%))}}
+.car-sad{display:block;width:120px;margin:0 auto;filter:grayscale(.3);animation:sad 1.4s ease-in-out infinite}
+@keyframes sad{50%{transform:rotate(-6deg) translateY(3px)}}
+@media (prefers-reduced-motion:reduce){.hero .logo,.hero .plane,.rainbow .rc,.car-sad{animation:none}.zoom{display:none}}
+</style>
+</head>
+<body class="kit">
+<main class="k-wrap">
+
+  <!-- 開始 -->
+  <section class="k-screen is-active k-stack" id="sSetup">
+    <div class="k-panel k-panel--tape hero">
+      <img class="plane" src="img/plane.png" alt="" aria-hidden="true">
+      <img class="logo" src="img/itokushima.png" alt="ito のロゴ">
+      <h1 class="k-h1">ito</h1>
+      <p class="sub">数字は言わずに、お題で伝えて<br>みんなで大きい順に並べよう！</p>
+    </div>
+    <div class="k-panel">
+      <span class="k-tag">あそぶ人</span>
+      <div class="members" id="members" style="margin-top:8px"></div>
+      <p class="k-hint" id="memberNote"></p>
+    </div>
+    <div class="k-panel">
+      <span class="k-tag">難しさ</span>
+      <div class="k-seg" id="diffSeg" role="group" aria-label="難しさ" style="margin-top:8px"></div>
+      <p class="k-hint" id="diffHint"></p>
+    </div>
+    <div class="k-panel">
+      <span class="k-tag">話し合いの時間</span>
+      <div class="k-seg" id="timeSeg" role="group" aria-label="話し合いの時間" style="margin-top:8px"></div>
+    </div>
+    <div class="k-panel">
+      <span class="k-tag">連続成功の記録</span>
+      <div class="rec-grid" id="recGrid"></div>
+      <p class="k-hint" id="recNote"></p>
+    </div>
+    <div class="k-panel">
+      <span class="k-tag">あそびかた</span>
+      <ol style="margin:8px 0 0;padding-left:20px;font-size:14px">
+        <li>お題をルーレットで決める（例：「食べ物の人気度」1＝不人気〜100＝国民的大人気）</li>
+        <li>スマホを回して、1人ずつこっそり自分の数字（1〜100）を見る</li>
+        <li>数字は言わずに、お題に沿った「たとえ」で伝え合い、大きい順に並べる</li>
+        <li>全員の順番が合っていれば成功！1人でも違えばドボン</li>
+      </ol>
+    </div>
+    <button class="k-btn k-btn--primary k-btn--big k-btn--block" id="btnStart" data-se="start">お題を決める</button>
+  </section>
+
+  <!-- お題 -->
+  <section class="k-screen k-stack" id="sTheme">
+    <div class="theme-card">
+      <span class="lbl">お題</span>
+      <div class="theme-text" id="themeText" aria-live="polite"></div>
+      <div class="scale" id="themeScale"></div>
+    </div>
+    <button class="k-btn k-btn--primary k-btn--big k-btn--block" id="btnThemeOk" data-se="ok">このお題で決定！</button>
+    <button class="k-btn k-btn--block" id="btnThemeSpin" data-se="none">別のお題にする</button>
+    <details class="k-panel custom" id="customBox">
+      <summary>自分でお題を入れる</summary>
+      <input class="k-input" id="cText" maxlength="40" placeholder="お題（例：好きな季節のイベント）">
+      <div class="two">
+        <input class="k-input" id="cMin" maxlength="16" placeholder="1 のとき（例：いらない）">
+        <input class="k-input" id="cMax" maxlength="16" placeholder="100 のとき（例：最高）">
+      </div>
+      <button class="k-btn k-btn--teal k-btn--block" id="btnCustom" style="margin-top:8px" data-se="ok">このお題で遊ぶ</button>
+    </details>
+  </section>
+
+  <!-- 数字配り -->
+  <section class="k-screen k-stack" id="sDeal">
+    <div class="k-panel k-center" id="dealPanel">
+      <p class="k-dim" style="margin:0;font-weight:900" id="dealTheme"></p>
+      <p class="deal-who" id="dealWho"></p>
+      <p class="k-hint" id="dealMsg" style="margin:4px 0 0"></p>
+      <div class="flip" id="card"><div class="in">
+        <div class="face back"><img src="img/itokushima.png" alt=""></div>
+        <div class="face front"><small>あなたの数字</small><b id="myNum"></b></div>
+      </div></div>
+      <div class="scale" id="dealScale"></div>
+      <div class="dots" id="dealDots"></div>
+    </div>
+    <button class="k-btn k-btn--primary k-btn--big k-btn--block" id="btnReveal" data-se="none">タップして数字を見る</button>
+    <button class="k-btn k-btn--teal k-btn--big k-btn--block" id="btnDealNext" data-se="none" hidden></button>
+  </section>
+
+  <!-- 並べる -->
+  <section class="k-screen k-stack" id="sOrder">
+    <div class="theme-card" style="padding:12px 12px 10px">
+      <span class="lbl">お題</span>
+      <div class="theme-text" id="orderTheme" style="min-height:0;font-size:clamp(18px,5.6vw,24px);margin-top:6px"></div>
+    </div>
+    <div id="timerBox">
+      <div class="timer" id="timer"><i></i><img class="car" src="img/car.png" alt=""></div>
+      <div class="time-row"><span>話し合いの残り時間</span><span class="t" id="timeLeft"></span></div>
+    </div>
+    <div class="k-panel" id="orderPanel" style="padding:10px">
+      <p class="k-hint" style="margin:0 0 4px;text-align:center">カードをドラッグ（または ▲▼）で、<b>上ほど大きい数字</b>に並べよう</p>
+      <div class="edge"><b>100</b><span id="edgeMax"></span></div>
+      <ol class="plist" id="plist"></ol>
+      <div class="edge"><b>1</b><span id="edgeMin"></span></div>
+    </div>
+    <div class="ctrl3">
+      <button class="k-btn" id="btnPause" aria-pressed="false" data-se="none">一時停止</button>
+      <button class="k-btn" id="btnPeek" aria-pressed="false" data-se="none">のぞき見</button>
+    </div>
+    <p class="k-hint k-center" id="peekHint" hidden style="margin:0">のぞき見中：カードを押している間だけ数字が見えます（時間は止まります）</p>
+    <button class="k-btn k-btn--primary k-btn--big k-btn--block" id="btnSubmit" data-se="none">この順番で確定！</button>
+  </section>
+
+  <!-- 結果 -->
+  <section class="k-screen k-stack" id="sResult">
+    <div class="theme-card" style="padding:12px 12px 10px">
+      <span class="lbl">結果発表</span>
+      <div class="theme-text" id="resTheme" style="min-height:0;font-size:clamp(18px,5.6vw,24px);margin-top:6px"></div>
+    </div>
+    <p class="status" id="status" aria-live="polite"></p>
+    <div class="modes" id="modes">
+      <button class="k-btn k-btn--teal" data-mode="top" data-se="start">上から発表</button>
+      <button class="k-btn k-btn--teal" data-mode="bottom" data-se="start">下から発表</button>
+      <button class="k-btn k-btn--teal" data-mode="random" data-se="start">ランダム</button>
+      <button class="k-btn k-btn--teal" data-mode="manual" data-se="start">自分でタップ</button>
+    </div>
+    <div class="k-panel" style="padding:10px">
+      <div class="edge"><b>100</b><span id="resMax"></span></div>
+      <div class="plist" id="rlist" style="touch-action:auto"></div>
+      <div class="edge"><b>1</b><span id="resMin"></span></div>
+    </div>
+    <button class="k-btn k-btn--block" id="btnOpenAll" data-se="none" hidden>全員の数字を見る</button>
+    <div class="k-stack" id="after" hidden>
+      <div id="afterArt"></div>
+      <div class="k-panel">
+        <span class="k-tag">次の難しさ</span>
+        <div class="k-seg" id="diffSeg2" role="group" aria-label="次の難しさ" style="margin-top:8px"></div>
+      </div>
+      <div class="k-grid2">
+        <button class="k-btn" id="btnSame" data-se="start">同じお題でもう一回</button>
+        <button class="k-btn k-btn--primary" id="btnNew" data-se="start">新しいお題で</button>
+      </div>
+      <button class="k-btn k-btn--ghost k-btn--block" id="btnTitle">設定にもどる</button>
+    </div>
+  </section>
+</main>
+
+<script src="../../kit/kit.js"></script>
+<script>
+(() => {
+'use strict';
+const ID = 'ito';
+const MIN_P = 2, MAX_P = 8;
+/* 難しさ：数字がどれだけ近くに集まるか（幅） */
+const DIFFS = [
+  { k:'easy',    label:'かんたん', width:100, hint:'数字は1〜100にばらばら。まずはここから' },
+  { k:'normal',  label:'ふつう',   width:60,  hint:'数字が幅60の中に集まる' },
+  { k:'hard',    label:'むずかしい', width:30, hint:'数字が幅30の中にぎゅっと集まる' },
+  { k:'extreme', label:'ゲキムズ', width:14,  hint:'数字が幅14の中に密集。1の差を伝え分けよう' },
+];
+const TIMES = [60, 90, 120, 180, 0]; // 0 = 制限なし
+/* お題（元の Itokushima のお題と出やすさ） */
+const THEMES = [
+  {t:'食べ物の人気度', min:'不人気', max:'国民的大人気', w:1},
+  {t:'無人島に持っていきたいもの', min:'いらない', max:'絶対必要', w:1},
+  {t:'ペットにしたい動物', min:'飼いたくない', max:'最高に飼いたい', w:1},
+  {t:'最強の武器', min:'素手', max:'伝説の聖剣', w:1},
+  {t:'一生これしか食べられないなら？', min:'きつい', max:'幸せ', w:1},
+  {t:'モテる人の条件', min:'どうでもいい', max:'必須条件', w:1},
+  {t:'かっこいいと思う職業', min:'地味', max:'花形', w:1},
+  {t:'理想の休日の過ごし方', min:'最悪', max:'最高', w:1},
+  {t:'言われて嬉しい言葉', min:'響かない', max:'感涙', w:1},
+  {t:'「贅沢だな」と感じること', min:'日常的', max:'最高級の贅沢', w:1},
+  {t:'ゾンビに囲まれた時の生存率', min:'即脱落', max:'無双して生き残る', w:1},
+  {t:'超能力として持つのに便利なもの', min:'ゴミ捨て場を当てる程度', max:'時空操作', w:1},
+  {t:'「こいつ、強そうだな」と思う特徴', min:'弱そう', max:'ラスボス感', w:1},
+  {t:'明日世界が終わるなら何をする？', min:'寝るだけ', max:'全力で楽しむ', w:1},
+  {t:'魔法学園で習いたい魔法', min:'火を灯すだけ', max:'禁忌の魔術', w:1},
+  {t:'コンビニでつい買ってしまうもの', min:'買わない', max:'絶対カゴに入れる', w:1},
+  {t:'家事の面倒くささ', min:'楽勝', max:'一生やりたくない', w:1},
+  {t:'ちょうどいいお出かけの距離', min:'玄関先', max:'宇宙旅行', w:1},
+  {t:'カバンの中に入っていると安心するもの', min:'ゴミ', max:'命の恩人レベル', w:1},
+  {t:'100円ショップで価値を感じるもの', min:'妥当', max:'1万円でも買う', w:1},
+  {t:'楽しいこと', min:'退屈', max:'最高にエキサイティング', w:1},
+  {t:'美味しいもの', min:'まずい', max:'ほっぺが落ちる', w:1},
+  {t:'楽しかった旅行先', min:'退屈', max:'最高にエキサイティング', w:30},
+  {t:'衝撃的な思い出', min:'退屈', max:'度肝抜かれる', w:30},
+  {t:'{player}の良いところ', min:'よくない所', max:'いいところ', w:10},
+  {t:'右隣の人がやりそうな事', min:'絶対やらない', max:'やりそうすぎて怖い', w:1},
+];
+
+const $ = id => document.getElementById(id);
+const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const pick = a => a[Math.floor(Math.random() * a.length)];
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+const vib = p => { try{ navigator.vibrate && navigator.vibrate(p); }catch(e){} };
+const clampN = (v, lo, hi, d) => { const n = Math.round(+v); return isFinite(n) ? Math.max(lo, Math.min(hi, n)) : d; };
+
+/* ---------- 状態 ---------- */
+const rawSize = () => clampN(Kit.settings.get().partySize, 1, 99, 2);
+const partyNames = () => {
+  const names = Kit.players(Math.max(MIN_P, Math.min(MAX_P, rawSize())));
+  // 名前の重複は番号で区別（数字の割り当てに名前を使うため）
+  const seen = {};
+  return names.map(n => { seen[n] = (seen[n] || 0) + 1; return seen[n] > 1 ? `${n}${seen[n]}` : n; });
+};
+const fresh = () => ({
+  phase:'setup', players: partyNames(),
+  diff: Kit.store.get(ID + '.diff', 'normal'), time: Kit.store.get(ID + '.time', 90),
+  theme: null, nums: {}, dealIdx: 0, order: [], timeLeft: 0, recorded: false,
+});
+let S = fresh();
+const diffOf = k => DIFFS.find(d => d.k === k) || DIFFS[1];
+
+Kit.mount({ id: ID, title: 'ito', onSave: () => {
+  if(S.phase === 'setup' || (S.phase === 'result' && S.recorded)) return null;
+  return JSON.parse(JSON.stringify(S));
+}});
+
+/* ---------- 記録（難しさごとの連続成功） ---------- */
+const REC_KEY = ID + '.records';
+const getRecs = () => Object.assign({}, ...DIFFS.map(d => ({ [d.k]: { streak:0, best:0, people:0, date:'' } })), Kit.store.get(REC_KEY, {}));
+function updateRec(perfect, people){
+  const r = getRecs(), x = r[S.diff];
+  if(perfect){
+    x.streak += 1;
+    if(x.streak >= x.best){ x.best = x.streak; x.people = people; const d = new Date(); x.date = `${d.getFullYear()}/${d.getMonth()+1}/${d.getDate()}`; }
+  } else x.streak = 0;
+  Kit.store.set(REC_KEY, r);
+  return x;
+}
+
+/* ---------- 数字を配る ---------- */
+function dealNumbers(){
+  const w = diffOf(S.diff).width, n = S.players.length;
+  const span = Math.max(w, n);           // 人数分の数字は必ず入るように
+  const lo = 1 + Math.floor(Math.random() * (100 - span + 1));
+  const pool = []; for(let v = lo; v < lo + span; v++) pool.push(v);
+  for(let i = pool.length - 1; i > 0; i--){ const j = Math.floor(Math.random() * (i + 1)); [pool[i], pool[j]] = [pool[j], pool[i]]; }
+  S.nums = {}; S.players.forEach((p, i) => S.nums[p] = pool[i]);
+}
+const idealOrder = () => S.players.slice().sort((a, b) => S.nums[b] - S.nums[a]); // 上ほど大きい
+
+/* ---------- 共通：目盛り ---------- */
+function scaleHtml(th, num){
+  return `<div class="end"><b>1</b><span>${esc(th.min)}</span></div>
+    <div class="rail">${num != null ? `<span class="pin" style="left:${(num - 1) / 99 * 100}%"></span>` : ''}</div>
+    <div class="end"><b>100</b><span>${esc(th.max)}</span></div>`;
+}
+
+/* =========================================================
+   開始画面
+   ========================================================= */
+function segHtml(list, cur, key, label){
+  return list.map(v => { const val = typeof v === 'object' ? v.k : v; return `<button type="button" data-${key}="${val}" aria-pressed="${String(val) === String(cur)}">${esc(label(v))}</button>`; }).join('');
+}
+const timeLabel = t => t ? (t >= 60 && t % 60 === 0 ? `${t / 60}分` : `${t}秒`) : 'なし';
+function drawSetup(){
+  S.players = partyNames();
+  $('members').innerHTML = S.players.map(p => `<span class="k-chip">${esc(p)}</span>`).join('') + `<span class="k-chip k-chip--teal">${S.players.length}人</span>`;
+  const raw = rawSize();
+  $('memberNote').textContent = (raw < MIN_P ? `ito は2人から遊べます。${S.players.length}人で始めます。` : raw > MAX_P ? `ito は2〜8人です。${S.players.length}人で遊びます。` : '') + '人数と名前はタイトルの「みんなで遊ぶ」で変えられます。';
+  $('diffSeg').innerHTML = segHtml(DIFFS, S.diff, 'diff', d => d.label);
+  $('diffHint').textContent = diffOf(S.diff).hint;
+  $('timeSeg').innerHTML = segHtml(TIMES, S.time, 'time', timeLabel);
+  const r = getRecs();
+  $('recGrid').innerHTML = DIFFS.map(d => `<div class="${d.k === S.diff ? 'on' : ''}"><span>${d.label}</span><b>${r[d.k].streak}</b><span>最高 ${r[d.k].best}</span></div>`).join('');
+  const x = r[S.diff];
+  $('recNote').textContent = x.best ? `${diffOf(S.diff).label}の最高記録：${x.best}連続（${x.people}人・${x.date}）` : '全員の順番が合うと、連続成功が1つ増えます。';
+}
+document.addEventListener('click', e => {
+  const d = e.target.closest('[data-diff]');
+  if(d){ S.diff = d.dataset.diff; Kit.store.set(ID + '.diff', S.diff); Kit.SE.play('select'); if(S.phase === 'setup') drawSetup(); else drawDiff2(); return; }
+  const t = e.target.closest('[data-time]');
+  if(t){ S.time = +t.dataset.time; Kit.store.set(ID + '.time', S.time); Kit.SE.play('select'); drawSetup(); }
+});
+$('btnStart').addEventListener('click', () => {
+  const keep = { diff: S.diff, time: S.time };
+  S = Object.assign(fresh(), keep);
+  S.phase = 'theme';
+  Kit.screen('sTheme'); spinTheme();
+});
+
+/* =========================================================
+   お題ルーレット
+   ========================================================= */
+function rollTheme(){
+  const total = THEMES.reduce((a, t) => a + t.w, 0);
+  let r = Math.random() * total;
+  for(const t of THEMES){ if((r -= t.w) < 0) return t; }
+  return THEMES[0];
+}
+const resolve = t => ({ text: t.t.replace('{player}', pick(S.players)), min: t.min, max: t.max });
+let spinning = false;
+async function spinTheme(){
+  if(spinning) return;
+  spinning = true; $('btnThemeOk').disabled = true; $('btnThemeSpin').disabled = true;
+  const goal = resolve(rollTheme());
+  const el = $('themeText');
+  el.classList.remove('land'); el.classList.add('spin'); $('themeScale').innerHTML = '';
+  let delay = 45, k = Math.floor(Math.random() * THEMES.length);
+  while(delay < 260){
+    k = (k + 1) % THEMES.length;
+    el.textContent = THEMES[k].t.replace('{player}', '？？？');
+    Kit.SE.play('tick');
+    await sleep(delay); delay *= 1.12;
+  }
+  S.theme = goal;
+  showTheme(true);
+  spinning = false; $('btnThemeOk').disabled = false; $('btnThemeSpin').disabled = false;
+}
+function showTheme(landed){
+  const el = $('themeText');
+  el.classList.remove('spin'); el.textContent = S.theme.text;
+  $('themeScale').innerHTML = scaleHtml(S.theme);
+  if(landed){ void el.offsetWidth; el.classList.add('land'); Kit.SE.play('stamp'); vib(80); }
+}
+$('btnThemeSpin').addEventListener('click', () => { Kit.SE.play('whoosh'); spinTheme(); });
+$('btnThemeOk').addEventListener('click', () => { if(S.theme) startDeal(); });
+$('btnCustom').addEventListener('click', () => {
+  const text = $('cText').value.trim(), min = $('cMin').value.trim(), max = $('cMax').value.trim();
+  if(!text){ Kit.toast('お題を入れてください'); Kit.shake($('cText')); return; }
+  S.theme = { text, min: min || '小さい', max: max || '大きい' };
+  $('customBox').open = false; showTheme(true);
+  setTimeout(startDeal, 500);
+});
+
+/* =========================================================
+   数字配り（スマホを回す）
+   ========================================================= */
+function startDeal(){
+  dealNumbers();
+  S.phase = 'deal'; S.dealIdx = 0; S.recorded = false;
+  Kit.screen('sDeal'); drawDeal();
+}
+function drawDeal(){
+  const i = S.dealIdx, p = S.players[i];
+  $('dealTheme').textContent = `お題：${S.theme.text}`;
+  $('dealWho').textContent = `${p} さん`;
+  $('dealMsg').textContent = 'まわりの人に画面を見せないでね';
+  $('card').classList.remove('open');
+  $('myNum').textContent = '';
+  $('dealScale').innerHTML = scaleHtml(S.theme);
+  $('dealDots').innerHTML = S.players.map((x, k) => `<i class="${k < i ? 'done' : k === i ? 'now' : ''}" title="${esc(x)}"></i>`).join('');
+  $('btnReveal').hidden = false; $('btnDealNext').hidden = true;
+}
+$('btnReveal').addEventListener('click', () => {
+  const p = S.players[S.dealIdx], n = S.nums[p];
+  $('myNum').textContent = n;
+  $('card').classList.add('open');
+  $('dealScale').innerHTML = scaleHtml(S.theme, 1);
+  requestAnimationFrame(() => requestAnimationFrame(() => { const pin = $('dealScale').querySelector('.pin'); if(pin) pin.style.left = `${(n - 1) / 99 * 100}%`; }));
+  Kit.SE.play('whoosh'); setTimeout(() => Kit.SE.play('pop'), 300); vib(60);
+  $('dealMsg').textContent = '覚えたら画面をかくして次の人へ';
+  $('btnReveal').hidden = true; $('btnDealNext').hidden = false;
+  $('btnDealNext').textContent = S.dealIdx + 1 < S.players.length ? `覚えた！ ${S.players[S.dealIdx + 1]} さんへ渡す` : '全員見た！話し合いスタート';
+});
+$('btnDealNext').addEventListener('click', () => {
+  // 次の人に見えないよう、先にカードを閉じる
+  $('card').classList.remove('open'); $('myNum').textContent = '';
+  Kit.SE.play('slide');
+  if(S.dealIdx + 1 < S.players.length){ S.dealIdx++; drawDeal(); window.scrollTo(0, 0); }
+  else startOrder();
+});
+
+/* =========================================================
+   並べる（ドラッグ＋タイマー）
+   ========================================================= */
+let paused = false, peek = false, tickT = 0, armed = false, lastSec = -1;
+function startOrder(){
+  S.phase = 'order';
+  S.order = S.players.slice().sort(() => Math.random() - .5);
+  S.timeLeft = S.time;
+  enterOrder();
+  Kit.SE.play('go');
+}
+function enterOrder(){
+  paused = false; peek = false; armed = false;
+  $('orderTheme').textContent = S.theme.text;
+  $('edgeMax').textContent = S.theme.max; $('edgeMin').textContent = S.theme.min;
+  $('timerBox').hidden = !S.time;
+  drawList(); drawCtrl(); drawTimer();
+  Kit.screen('sOrder');
+  clearInterval(tickT);
+  if(S.time) tickT = setInterval(tick, 250);
+}
+const GRIP = '<svg class="grip" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="9" cy="6" r="2"/><circle cx="15" cy="6" r="2"/><circle cx="9" cy="12" r="2"/><circle cx="15" cy="12" r="2"/><circle cx="9" cy="18" r="2"/><circle cx="15" cy="18" r="2"/></svg>';
+function drawList(){
+  $('plist').innerHTML = S.order.map((p, i) => `<li class="pc" data-p="${esc(p)}"><span class="rank">${i + 1}</span><span class="nm">${esc(p)}</span>
+    <span class="peek" hidden></span><span class="mv">${GRIP.replace('class="grip"', 'class="grip" style="align-self:center"')}<button type="button" data-mv="-1" aria-label="${esc(p)}を上へ" data-se="none">▲</button><button type="button" data-mv="1" aria-label="${esc(p)}を下へ" data-se="none">▼</button></span></li>`).join('');
+  syncRanks();
+}
+function syncRanks(){
+  const items = [...$('plist').children];
+  S.order = items.map(x => x.dataset.p);
+  items.forEach((x, i) => {
+    x.querySelector('.rank').textContent = i + 1;
+    x.querySelector('[data-mv="-1"]').disabled = i === 0;
+    x.querySelector('[data-mv="1"]').disabled = i === items.length - 1;
+  });
+  disarm();
+}
+// 並べ替え時に他のカードをなめらかに動かす（FLIP）
+function flip(els, mutate){
+  const before = new Map(els.map(el => [el, el.getBoundingClientRect().top]));
+  mutate();
+  els.forEach(el => {
+    const d = before.get(el) - el.getBoundingClientRect().top;
+    if(d && el.animate) el.animate([{ transform: `translateY(${d}px)` }, { transform: 'none' }], { duration: 180, easing: 'cubic-bezier(.2,.9,.3,1)' });
+  });
+}
+let drag = null;
+$('plist').addEventListener('pointerdown', e => {
+  const el = e.target.closest('.pc'); if(!el || e.target.closest('button')) return;
+  if(peek){ showPeek(el, true); el.setPointerCapture(e.pointerId); return; }
+  e.preventDefault();
+  drag = { el, id: e.pointerId, y0: e.clientY, top0: el.offsetTop };
+  el.setPointerCapture(e.pointerId); el.classList.add('drag');
+  el.style.transform = 'scale(1.03)';
+  Kit.SE.play('select'); vib(15);
+});
+$('plist').addEventListener('pointermove', e => {
+  if(!drag || e.pointerId !== drag.id) return;
+  const { el } = drag, list = $('plist');
+  const want = drag.top0 + (e.clientY - drag.y0);
+  const center = want + el.offsetHeight / 2;
+  const others = [...list.children].filter(x => x !== el);
+  let target = 0; others.forEach(o => { if(center > o.offsetTop + o.offsetHeight / 2) target++; });
+  const cur = [...list.children].indexOf(el);
+  if(target !== cur){
+    flip(others, () => list.insertBefore(el, others[target] || null));
+    Kit.SE.play('tick'); vib(8);
+  }
+  el.style.transform = `translateY(${want - el.offsetTop}px) scale(1.03)`;
+});
+function endDrag(e){
+  if(peek){ const el = e.target.closest && e.target.closest('.pc'); document.querySelectorAll('.pc .peek').forEach(x => x.hidden = true); return; }
+  if(!drag || e.pointerId !== drag.id) return;
+  const { el } = drag; drag = null;
+  const off = el.style.transform.match(/translateY\((-?[\d.]+)px\)/);
+  el.classList.remove('drag'); el.style.transform = '';
+  if(off && el.animate) el.animate([{ transform: `translateY(${off[1]}px)` }, { transform: 'none' }], { duration: 160, easing: 'ease-out' });
+  syncRanks();
+}
+$('plist').addEventListener('pointerup', endDrag);
+$('plist').addEventListener('pointercancel', endDrag);
+$('plist').addEventListener('click', e => {
+  const b = e.target.closest('[data-mv]'); if(!b || peek) return;
+  const el = b.closest('.pc'), list = $('plist'), items = [...list.children], i = items.indexOf(el), j = i + (+b.dataset.mv);
+  if(j < 0 || j >= items.length) return;
+  flip(items, () => { if(+b.dataset.mv < 0) list.insertBefore(el, items[j]); else list.insertBefore(items[j], el); });
+  Kit.SE.play('slide'); syncRanks();
+});
+function showPeek(el){
+  const p = el.dataset.p, x = el.querySelector('.peek');
+  x.textContent = S.nums[p]; x.hidden = false; vib(30); Kit.SE.play('pop');
+}
+function drawCtrl(){
+  $('btnPause').setAttribute('aria-pressed', String(paused));
+  $('btnPause').textContent = paused ? '再開する' : '一時停止';
+  $('btnPause').hidden = !S.time;
+  $('btnPeek').setAttribute('aria-pressed', String(peek));
+  $('btnPeek').textContent = peek ? 'のぞき見をやめる' : 'のぞき見';
+  $('peekHint').hidden = !peek;
+  $('orderPanel').classList.toggle('peeking', peek);
+  $('timer').classList.toggle('paused', paused || peek);
+}
+$('btnPause').addEventListener('click', () => { paused = !paused; Kit.SE.play(paused ? 'slide' : 'go'); vib(40); drawCtrl(); });
+$('btnPeek').addEventListener('click', () => {
+  peek = !peek; Kit.SE.play('select'); vib(60); drawCtrl();
+  if(!peek) document.querySelectorAll('.pc .peek').forEach(x => x.hidden = true);
+});
+function tick(){
+  if(S.phase !== 'order') { clearInterval(tickT); return; }
+  if(paused || peek || drag) return drawTimer();
+  S.timeLeft = Math.max(0, S.timeLeft - .25);
+  drawTimer();
+  const sec = Math.ceil(S.timeLeft);
+  if(sec !== lastSec){ lastSec = sec; if(sec <= 10 && sec > 0) Kit.SE.play('count'); }
+  if(S.timeLeft <= 0){ clearInterval(tickT); Kit.toast('タイムアップ！この順番で確定します', 1600); Kit.SE.play('buzz'); vib(300); setTimeout(submitOrder, 900); }
+}
+function drawTimer(){
+  if(!S.time) return;
+  const r = Math.max(0, S.timeLeft / S.time), sec = Math.ceil(S.timeLeft);
+  const low = sec <= 10;
+  $('timer').querySelector('i').style.transform = `scaleX(${r})`;
+  $('timer').querySelector('.car').style.left = `${(1 - r) * 100}%`;
+  $('timer').classList.toggle('low', low);
+  $('timeLeft').textContent = `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, '0')}`;
+  $('timeLeft').classList.toggle('low', low && !paused && !peek);
+}
+function disarm(){ armed = false; $('btnSubmit').classList.remove('armed'); $('btnSubmit').textContent = 'この順番で確定！'; }
+$('btnSubmit').addEventListener('click', () => {
+  if(!armed){ armed = true; $('btnSubmit').classList.add('armed'); $('btnSubmit').textContent = 'もう一度タップで確定'; Kit.SE.play('select'); vib(40); return; }
+  submitOrder();
+});
+function submitOrder(){
+  if(S.phase !== 'order') return;
+  clearInterval(tickT); syncRanks();
+  S.phase = 'result'; S.recorded = false;
+  Kit.SE.play('stamp'); vib([40, 40, 80]);
+  enterResult();
+}
+
+/* =========================================================
+   結果発表
+   ========================================================= */
+let revealing = false, manual = false, okCount = 0, over = false;
+function enterResult(){
+  revealing = false; manual = false; okCount = 0; over = false;
+  $('resTheme').textContent = S.theme.text;
+  $('resMax').textContent = S.theme.max; $('resMin').textContent = S.theme.min;
+  $('rlist').className = 'plist';
+  $('rlist').innerHTML = S.order.map((p, i) => `<div class="rc" data-i="${i}" role="button" tabindex="0" aria-label="${esc(p)}の数字を見る"><span class="rank">${i + 1}</span><span class="nm">${esc(p)}</span><span class="num"></span></div>`).join('');
+  $('status').className = 'status'; $('status').textContent = '発表のしかたを選んでね';
+  $('modes').hidden = false; $('btnOpenAll').hidden = true; $('after').hidden = true;
+  Kit.screen('sResult');
+}
+const card = i => $('rlist').children[i];
+async function revealAt(i){
+  const el = card(i); if(!el || el.classList.contains('open')) return;
+  const ideal = idealOrder(), p = S.order[i];
+  const ok = ideal[i] === p;
+  el.querySelector('.num').textContent = S.nums[p];
+  el.classList.add('open');
+  Kit.SE.play('whoosh'); await sleep(380);
+  if(ok){
+    okCount++;
+    el.classList.add('ok', 'pop');
+    // 正解が続くほど高い音に
+    Kit.SE.play(okCount >= S.players.length ? 'start' : 'ok'); vib(30);
+    if(!over){
+      $('status').className = 'status ok';
+      $('status').textContent = okCount >= S.players.length ? 'PERFECT！' : `${okCount}人 正解！`;
+    }
+    if(okCount === S.players.length && !over) await perfect();
+  } else {
+    el.classList.add('ng'); Kit.shake(el);
+    const rightNo = ideal.indexOf(p) + 1;
+    el.insertAdjacentHTML('beforeend', `<span class="why">本当は ${rightNo} 番目</span>`);
+    if(!over){
+      over = true;
+      Kit.SE.play('buzz'); vib(400);
+      $('status').className = 'status ng'; $('status').textContent = 'ドボン！順番がちがいます';
+      record(false);
+      $('btnOpenAll').hidden = false;
+    }
+  }
+}
+async function runReveal(idxs){
+  revealing = true;
+  for(const i of idxs){
+    if(over || S.phase !== 'result') break;
+    await revealAt(i);
+    await sleep(over ? 0 : 650 + okCount * 180); // 成功が続くほど溜める
+  }
+  revealing = false;
+}
+$('modes').addEventListener('click', e => {
+  const b = e.target.closest('[data-mode]'); if(!b || revealing) return;
+  $('modes').hidden = true;
+  const n = S.order.length, all = [...Array(n).keys()];
+  const m = b.dataset.mode;
+  if(m === 'manual'){ manual = true; $('status').className = 'status'; $('status').textContent = '数字を見たい人をタップ！'; return; }
+  const seq = m === 'top' ? all : m === 'bottom' ? all.reverse() : all.sort(() => Math.random() - .5);
+  runReveal(seq);
+});
+$('rlist').addEventListener('click', e => {
+  const el = e.target.closest('.rc'); if(!el || revealing || over) return;
+  if(!manual){ if($('modes').hidden) return; $('modes').hidden = true; manual = true; }
+  revealing = true; revealAt(+el.dataset.i).then(() => { revealing = false; });
+});
+$('rlist').addEventListener('keydown', e => { if((e.key === 'Enter' || e.key === ' ') && e.target.closest('.rc')){ e.preventDefault(); e.target.click(); } });
+$('btnOpenAll').addEventListener('click', async () => {
+  $('btnOpenAll').hidden = true;
+  const got = okCount;
+  for(let i = 0; i < S.order.length; i++){ if(!card(i).classList.contains('open')){ revealAt(i); await sleep(220); } }
+  await sleep(500);
+  showAfter(false);
+  await Kit.fail({ title: 'ドボン…', sub: got ? `${got}人まで正解` : '1人目でドボン' });
+});
+async function perfect(){
+  record(true);
+  $('rlist').classList.add('rainbow');
+  const img = document.createElement('img');
+  img.src = 'img/shinkansen.png'; img.className = 'zoom'; img.alt = '';
+  document.body.appendChild(img); setTimeout(() => img.remove(), 1800);
+  vib([60, 60, 120]);
+  await sleep(900);
+  showAfter(true);
+  const x = getRecs()[S.diff];
+  await Kit.celebrate({ title: 'PERFECT!', sub: `${diffOf(S.diff).label}で ${x.streak}連続成功！` });
+}
+function record(perfectRun){
+  if(S.recorded) return;
+  S.recorded = true;
+  Kit.clearSave(ID);
+  const x = updateRec(perfectRun, S.players.length);
+  const g = Kit.newGroup();
+  const detail = `${diffOf(S.diff).label}・${S.theme.text}`;
+  S.players.forEach(p => Kit.record({ game: ID, player: p, result: perfectRun ? 'clear' : 'fail', score: perfectRun ? S.players.length : okCount, detail, group: g }));
+  if(perfectRun && x.streak === x.best && x.best > 1) setTimeout(() => Kit.toast(`最高記録更新！${x.best}連続`, 2000), 2800);
+}
+function showAfter(ok){
+  $('after').hidden = false;
+  $('afterArt').innerHTML = ok ? '' : '<img class="car-sad" src="img/car.png" alt="">';
+  drawDiff2();
+}
+function drawDiff2(){ $('diffSeg2').innerHTML = segHtml(DIFFS, S.diff, 'diff', d => d.label); }
+$('btnSame').addEventListener('click', () => { $('rlist').classList.remove('rainbow'); startDeal(); });
+$('btnNew').addEventListener('click', () => { $('rlist').classList.remove('rainbow'); S.phase = 'theme'; S.theme = null; Kit.screen('sTheme'); spinTheme(); });
+$('btnTitle').addEventListener('click', () => { S = Object.assign(fresh(), { diff: S.diff, time: S.time }); drawSetup(); Kit.screen('sSetup'); });
+
+/* =========================================================
+   起動・再開
+   ========================================================= */
+drawSetup();
+const saved = Kit.load(ID);
+if(saved && saved.phase && saved.phase !== 'setup' && saved.theme !== undefined){
+  S = Object.assign(fresh(), saved);
+  if(S.phase === 'theme'){ Kit.screen('sTheme'); if(S.theme) showTheme(false); else spinTheme(); }
+  else if(S.phase === 'deal'){ Kit.screen('sDeal'); drawDeal(); }
+  else if(S.phase === 'order'){ enterOrder(); }
+  else if(S.phase === 'result'){ enterResult(); }
+  else { S = fresh(); drawSetup(); }
+  if(S.phase !== 'setup') Kit.toast('つづきから再開します');
+}
+})();
+</script>
+</body>
+</html>
